@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 import re
 
 
-utc_local = -6
+utc_local = -6 #UTC CDMX
 
 class Picking(models.Model):
     _inherit = 'stock.picking'
