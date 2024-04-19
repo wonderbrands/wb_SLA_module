@@ -1,6 +1,9 @@
 from odoo import models, api, fields
 from datetime import datetime, timedelta
 import re
+import logging
+_logger = logging.getLogger(__name__)
+
 
 
 utc_local = -6 #UTC CDMX
@@ -144,8 +147,23 @@ class Picking(models.Model):
             Se obtienen los valores del cliente (Marketplace) y el numero de orden
         """
 
+        # origin = self.origin
+        # order = self.env['sale.order'].search([('name', '=', origin)], limit=1)
+
         origin = self.origin
-        order = self.env['sale.order'].search([('name', '=', origin)], limit=1)
+        orders = self.env['sale.order'].search([('name', '=', origin)])
+        list_orders = []
+
+        for order in orders:
+            partner_name = order.partner_id.name
+            fullfilment = order.fullfilment
+            date_order = order.date_order
+            list_orders.append(partner_name)
+
+            print(f'partner_name= {partner_name}, origin= {origin}, date_order= {date_order}')
+
+        raise ('Mnual RAISE', list_orders)
+
         partner_name = order.partner_id.name
         fullfilment = order.fullfilment
 
@@ -164,6 +182,8 @@ class Picking(models.Model):
 
         # Establece el valor de pick_up_date al momento de la confirmación
         for picking in self:
-            picking.pick_up_date = self._get_order_values()
+            pickup_date = self._get_order_values()
+            _logger.info(f'\n\nPICKUPDATE: {pickup_date + timedelta(hours=utc_local)}\n\n')
+            picking.pick_up_date = pickup_date
 
         return res
