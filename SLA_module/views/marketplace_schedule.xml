@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- Definir la vista para el formulario -->
+        <record id="view_marketplace_schedule_form" model="ir.ui.view">
+            <field name="name">marketplace.schedule.form</field>
+            <field name="model">marketplace.schedule</field>
+            <field name="arch" type="xml">
+                <form string="Marketplace Schedule Pickup-Date">
+                    <sheet>
+                        <group>
+                            <!-- Agregar los campos al formulario con descripciones emergentes -->
+                            <field name="marketplace" string="Marketplace"
+                                   help="El nombre del marketplace donde se programará el horario."/>
+                            <field name="monday_to_thursday" string="Lunes a Jueves (horas)"
+                                   help="Horario para los días lunes a jueves.  Formato: numero entero de las horas que se sumarán    Ejemplo: 20"/>
+                            <field name="friday" string="Viernes (día y hora)"
+                                   help="Horario para el día viernes. Formato: Día hh:mm   Ejemplo: Vienes 12:00"/>
+                            <field name="saturday" string="Sábado (día y hora)"
+                                   help="Horario para el día sábado. Formato: Día hh:mm    Ejemplo: Sabado 12:00"/>
+                            <field name="sunday" string="Domingo (día y hora)"
+                                   help="Horario para el día domingo. Formato: Día hh:mm    Ejemplo: Domingo 12:00"/>
+<!--                            <field name="mercado_libre_id" invisible="1"/>-->
+                            <field name="auxiliar_1" invisible="1"/>
+                            <field name="flex" string="Flex (minutos)" attrs="{'invisible': [('auxiliar_1', '!=', 'True')]}"
+                                   help="Este campo solo es para mercado libre con envio Flex"/>
+                            <field name="auxiliar_2" invisible="1"/>
+                            <field name="sameDay_nextDay" string="Same-day/Next-day (minutos)" attrs="{'invisible': [('auxiliar_2', '!=', 'True')]}"
+                                   help="Este campo solo es para Shopify con envio Same day / Next day"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <!-- Definir la vista para la lista -->
+        <record id="view_marketplace_schedule_tree" model="ir.ui.view">
+            <field name="name">marketplace.schedule.tree</field>
+            <field name="model">marketplace.schedule</field>
+            <field name="arch" type="xml">
+                <tree string="Horarios pickup date ">
+                    <field name="marketplace"/>
+                    <field name="monday_to_thursday"/>
+                    <field name="friday"/>
+                    <field name="saturday"/>
+                    <field name="sunday"/>
+                    <field name="auxiliar_1" invisible="1"/>
+                    <field name="auxiliar_2" invisible="1"/>
+                    <field name="flex" attrs="{'invisible': [('auxiliar_1', '!=', 'True')]}"/>
+                    <field name="sameDay_nextDay" attrs="{'invisible': [('auxiliar_2', '!=', 'True')]}"/>
+<!--                    <field name="mercado_libre_id" invisible="1"/>-->
+                </tree>
+            </field>
+        </record>
+
+        <!-- Definir la acción para acceder a la vista de lista -->
+        <record id="action_marketplace_schedule" model="ir.actions.act_window">
+            <field name="name">Marketplace Schedule</field>
+            <field name="res_model">marketplace.schedule</field>
+            <field name="view_mode">tree,form</field>
+            <field name="view_id" ref="view_marketplace_schedule_tree"/>
+            <field name="context">{}</field>
+            <field name="help" type="html">
+                <p class="oe_view_nocontent_create">
+                    Click to add a new schedule.
+                </p>
+            </field>
+        </record>
+
+        <!-- Definir el menú para acceder al modelo -->
+        <menuitem id="menu_marketplace_schedule" name="Marketplace Schedule" parent="sale.sale_menu_root" sequence="20"/>
+        <menuitem id="menu_marketplace_schedule_list" name="Marketplace Schedule" parent="menu_marketplace_schedule" action="action_marketplace_schedule"/>
+
+    </data>
+</odoo>

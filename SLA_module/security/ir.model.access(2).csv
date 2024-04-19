@@ -1,0 +1,3 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+view_marketplace_schedule_form,marketplace.schedule.form,SLA_module.model_marketplace_schedule,base.group_user,1,1,1,1
+view_marketplace_schedule_tree,marketplace.schedule.tree,SLA_module.model_marketplace_schedule,base.group_user,1,1,1,1
