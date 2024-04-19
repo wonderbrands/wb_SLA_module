@@ -1,6 +1,9 @@
 from odoo import models, api, fields
 from datetime import datetime, timedelta
 import re
+import logging
+_logger = logging.getLogger(__name__)
+
 
 
 utc_local = -6 #UTC CDMX
@@ -164,6 +167,8 @@ class Picking(models.Model):
 
         # Establece el valor de pick_up_date al momento de la confirmación
         for picking in self:
-            picking.pick_up_date = self._get_order_values()
+            pickup_date = self._get_order_values()
+            _logger.info(f'\n\nPICKUPDATE: {pickup_date + timedelta(hours=utc_local)}\n\n')
+            picking.pick_up_date = pickup_date
 
         return res
