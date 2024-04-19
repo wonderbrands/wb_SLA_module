@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 import re
 
 
-utc_local = -6
+utc_local = -6 #UTC CDMX
 
 class Picking(models.Model):
     _inherit = 'stock.picking'
@@ -70,7 +70,7 @@ class Picking(models.Model):
         try:
 
             # Checamos si el marketplace es Mercado Libre
-            if dic_marketplace_info["marketplace"].name.lower().strip() == 'mercadolibre':
+            if dic_marketplace_info["marketplace"].name.lower().replace(" ", "") == 'mercadolibre':
                 print("ES MERCADO LIBRE")
                 dic_marketplace_info["flex"] =  marketplace_schedule.flex
                 # Checamos si es envio Flex
@@ -90,7 +90,7 @@ class Picking(models.Model):
                         return pickUp_date
 
             # Checamos si el marketplace es Shopify
-            elif dic_marketplace_info["marketplace"].name.lower().strip() == 'shopify':
+            elif dic_marketplace_info["marketplace"].name.lower().replace(" ", "") == 'shopify':
                 dic_marketplace_info["sameDay_nextDay"] = marketplace_schedule.sameDay_nextDay
 
                 if local_date.time() <= datetime.strptime(limit_hour, '%H:%M:%S').time():

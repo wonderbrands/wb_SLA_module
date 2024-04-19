@@ -22,10 +22,11 @@ class MarketplaceSchedule(models.Model):
     def _onchange_marketplace(self):
         print("Dentro de onchage marketplace")
         if isinstance(self.marketplace.name, str):
-            if self.marketplace.name.lower().strip() == 'mercadolibre':
-                print(self.marketplace.name.lower().strip())
+            print("Es un STR o no?", self.marketplace.name, type(self.marketplace.name), self.marketplace.name.lower().replace(" ", ""))
+            if self.marketplace.name.lower().replace(" ", "") == 'mercadolibre':
+                print(self.marketplace.name.lower().replace(" ", ""))
                 self.auxiliar_1 = 'True'
-            elif self.marketplace.name.lower().strip() == 'shopify':
+            elif self.marketplace.name.lower().replace(" ", "") == 'shopify':
                 self.auxiliar_2 = 'True'
             else:
                 'False'

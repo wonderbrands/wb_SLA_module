@@ -6,7 +6,7 @@
             <field name="name">marketplace.schedule.form</field>
             <field name="model">marketplace.schedule</field>
             <field name="arch" type="xml">
-                <form string="Marketplace Schedule Pickup-Date">
+                <form string="Esquema de horarios para pickup-date">
                     <sheet>
                         <group>
                             <!-- Agregar los campos al formulario con descripciones emergentes -->
@@ -55,7 +55,7 @@
 
         <!-- Definir la acción para acceder a la vista de lista -->
         <record id="action_marketplace_schedule" model="ir.actions.act_window">
-            <field name="name">Marketplace Schedule</field>
+            <field name="name">Esquema de horarios para pickup-date</field>
             <field name="res_model">marketplace.schedule</field>
             <field name="view_mode">tree,form</field>
             <field name="view_id" ref="view_marketplace_schedule_tree"/>
@@ -68,8 +68,8 @@
         </record>
 
         <!-- Definir el menú para acceder al modelo -->
-        <menuitem id="menu_marketplace_schedule" name="Marketplace Schedule" parent="sale.sale_menu_root" sequence="20"/>
-        <menuitem id="menu_marketplace_schedule_list" name="Marketplace Schedule" parent="menu_marketplace_schedule" action="action_marketplace_schedule"/>
+        <menuitem id="menu_marketplace_schedule" name="Esquema de horarios para pickup-date" parent="sale.sale_menu_root" sequence="20"/>
+        <menuitem id="menu_marketplace_schedule_list" name="Esquema de horarios para pickup-date" parent="menu_marketplace_schedule" action="action_marketplace_schedule"/>
 
     </data>
 </odoo>
