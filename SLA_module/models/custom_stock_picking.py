@@ -151,28 +151,29 @@ class Picking(models.Model):
         # order = self.env['sale.order'].search([('name', '=', origin)], limit=1)
 
         origin = self.origin
-        orders = self.env['sale.order'].search([('name', '=', origin)])
-        list_orders = []
-
-        for order in orders:
-            partner_name = order.partner_id.name
-            fullfilment = order.fullfilment
-            date_order = order.date_order
-            list_orders.append(partner_name)
-
-            print(f'partner_name= {partner_name}, origin= {origin}, date_order= {date_order}')
-
-        raise ('Mnual RAISE', list_orders)
-
-        partner_name = order.partner_id.name
-        fullfilment = order.fullfilment
-
-        date_order = order.date_order # + timedelta(hours=utc_local)  #UTC -6 CDMX
-
-        print(f'\n partner_name= {partner_name}  origin= {origin}   date_order={date_order} \n')
-
-        return self._compute_pickUp_date(partner_name,date_order, fullfilment)
-        marketplace_value = self.env['stock.picking'].search([('partner_id', '=', partner_id)])
+        raise ('Mnual RAISE', origin)
+        # orders = self.env['sale.order'].search([('name', '=', origin)])
+        # list_orders = []
+        #
+        # for order in orders:
+        #     partner_name = order.partner_id.name
+        #     fullfilment = order.fullfilment
+        #     date_order = order.date_order
+        #     list_orders.append(partner_name)
+        #
+        #     print(f'partner_name= {partner_name}, origin= {origin}, date_order= {date_order}')
+        #
+        # raise ('Mnual RAISE', list_orders)
+        #
+        #
+        # partner_name = order.partner_id.name
+        # fullfilment = order.fullfilment
+        #
+        # date_order = order.date_order # + timedelta(hours=utc_local)  #UTC -6 CDMX
+        #
+        # print(f'\n partner_name= {partner_name}  origin= {origin}   date_order={date_order} \n')
+        #
+        # return self._compute_pickUp_date(partner_name,date_order, fullfilment)
 
     def action_confirm(self):
 
