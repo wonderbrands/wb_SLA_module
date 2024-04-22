@@ -150,8 +150,12 @@ class Picking(models.Model):
         # origin = self.origin
         # order = self.env['sale.order'].search([('name', '=', origin)], limit=1)
 
-        origin = self.origin
-        raise ('Mnual RAISE', origin)
+        list_orders=[]
+        for order in self:
+            new=order.origin
+            list_orders.append(new)
+
+        raise ('Mnual RAISE', list_orders)
         # orders = self.env['sale.order'].search([('name', '=', origin)])
         # list_orders = []
         #
