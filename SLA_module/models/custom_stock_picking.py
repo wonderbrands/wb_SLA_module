@@ -155,33 +155,18 @@ class Picking(models.Model):
             new=order.origin
             list_orders.append(new)
 
-#<<<<<<< HEAD
-        raise Exception('Mnual RAISE', list_orders)
-#=======
-        #raise ('Mnual RAISE', list_orders)
-#>>>>>>> 3a571d5e9b53e1c0819c609fd1536146f074a8d8
-        # orders = self.env['sale.order'].search([('name', '=', origin)])
-        # list_orders = []
-        #
-        # for order in orders:
-        #     partner_name = order.partner_id.name
-        #     fullfilment = order.fullfilment
-        #     date_order = order.date_order
-        #     list_orders.append(partner_name)
-        #
-        #     print(f'partner_name= {partner_name}, origin= {origin}, date_order= {date_order}')
-        #
-        # raise ('Mnual RAISE', list_orders)
-        #
-        #
-        # partner_name = order.partner_id.name
-        # fullfilment = order.fullfilment
-        #
-        # date_order = order.date_order # + timedelta(hours=utc_local)  #UTC -6 CDMX
-        #
-        # print(f'\n partner_name= {partner_name}  origin= {origin}   date_order={date_order} \n')
-        #
-        # return self._compute_pickUp_date(partner_name,date_order, fullfilment)
+        origin = list_orders.append[0]
+        order = self.env['sale.order'].search([('name', '=', origin)], limit=1)
+
+        #raise Exception('Mnual RAISE', list_orders)
+
+        partner_name = order.partner_id.name
+        fullfilment = order.fullfilment
+        date_order = order.date_order # + timedelta(hours=utc_local)  #UTC -6 CDMX
+
+        print(f'partner_name= {partner_name}, origin= {origin}, date_order= {date_order}')
+
+        return self._compute_pickUp_date(partner_name,date_order, fullfilment)
 
     def action_confirm(self):
 
