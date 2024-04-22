@@ -169,6 +169,7 @@ class Picking(models.Model):
 
         partner_name = order.partner_id.name
         fullfilment = order.fulfillment
+        _logger.info("Fulfillment es: " + str(fullfilment) + ', ' + type(fullfilment))
         date_order = order.date_order # + timedelta(hours=utc_local)  #UTC -6 CDMX
 
         print(f'partner_name= {partner_name}, origin= {origin}, date_order= {date_order}')
