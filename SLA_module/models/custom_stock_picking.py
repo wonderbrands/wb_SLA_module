@@ -2,6 +2,8 @@ from odoo import models, api, fields
 from datetime import datetime, timedelta
 import re
 import logging
+
+logging.basicConfig(filename='SLA.log', level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 _logger = logging.getLogger(__name__)
 
 
@@ -49,7 +51,7 @@ class Picking(models.Model):
         day_of_week = local_date.strftime('%A').lower()
 
         # Hora limite en para saber si un envio toma la opcion A o la B (antes o depsues de...)
-        limit_hour = '20:00:00'
+        limit_hour = '12:00:00'
         #print(date + timedelta(hours=utc_local))
         print(day_of_week, "\n****************************************\n")
 
@@ -74,20 +76,25 @@ class Picking(models.Model):
 
             # Checamos si el marketplace es Mercado Libre
             if dic_marketplace_info["marketplace"].name.lower().replace(" ", "") == 'mercadolibre':
-                print("ES MERCADO LIBRE")
+                #print("ES MERCADO LIBRE")
+                _logger.info("ES MERCADO LIBRE")
                 dic_marketplace_info["flex"] =  marketplace_schedule.flex
                 # Checamos si es envio Flex
                 if fullfilment.lower() == "flex":
-                    print("ES FLEX")
+                    #print("ES FLEX")
+                    _logger.info("ES FLEX")
                     # Checamos si la orden entró antes de las 12:00 pm
-                    print(local_date.time())
+                    #print(local_date.time())
+                    _logger.info(local_date.time())
                     if local_date.time() <= datetime.strptime(limit_hour, '%H:%M:%S').time():
-                        print("Son menos de las ", limit_hour, " y se entregara hoy + x minutos")
+                        #print("Son menos de las ", limit_hour, " y se entregara hoy + x minutos")
+                        _logger.info("Son menos de las ", limit_hour, " y se entregara hoy + x minutos")
                         pickUp_date = date + timedelta(minutes=int(dic_marketplace_info["flex"])) # pickup date + tiempo definido en schedule
                         return pickUp_date
                     # Si la orden entró después de las 12:00 pm
                     else:
-                        print("Son mas de las ", limit_hour, " y se entregara maniana al final del dia")
+                        #print("Son mas de las ", limit_hour, " y se entregara maniana al final del dia")
+                        _logger.info("Son mas de las ", limit_hour, " y se entregara maniana al final del dia")
                         pickUp_date = local_date.replace(hour=0, minute=0, second=0)
                         pickUp_date = pickUp_date + timedelta(hours=(int(24+(23-utc_local))), minutes=int(59), seconds=int(00)) # Setea pickup date al dia siguiente a las 23:59 pm
                         return pickUp_date
