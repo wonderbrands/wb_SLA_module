@@ -163,6 +163,7 @@ class Picking(models.Model):
             print(f'partner_name= {partner_name}, origin= {origin}, date_order= {date_order}')
 
         raise ('Mnual RAISE', list_orders)
+        
 
         partner_name = order.partner_id.name
         fullfilment = order.fullfilment
