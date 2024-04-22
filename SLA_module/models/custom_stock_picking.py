@@ -161,7 +161,7 @@ class Picking(models.Model):
         #raise Exception('Mnual RAISE', list_orders)
 
         partner_name = order.partner_id.name
-        fullfilment = order.fullfilment
+        fullfilment = order.fulfillment
         date_order = order.date_order # + timedelta(hours=utc_local)  #UTC -6 CDMX
 
         print(f'partner_name= {partner_name}, origin= {origin}, date_order= {date_order}')
