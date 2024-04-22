@@ -155,7 +155,11 @@ class Picking(models.Model):
             new=order.origin
             list_orders.append(new)
 
+#<<<<<<< HEAD
         raise Exception('Mnual RAISE', list_orders)
+#=======
+        raise ('Mnual RAISE', list_orders)
+#>>>>>>> 3a571d5e9b53e1c0819c609fd1536146f074a8d8
         # orders = self.env['sale.order'].search([('name', '=', origin)])
         # list_orders = []
         #
