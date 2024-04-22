@@ -80,7 +80,7 @@ class Picking(models.Model):
                 _logger.info("ES MERCADO LIBRE")
                 dic_marketplace_info["flex"] =  marketplace_schedule.flex
                 # Checamos si es envio Flex
-                if fullfilment.lower() == "flex":
+                if fullfilment.lower() == "fbf":
                     #print("ES FLEX")
                     _logger.info("ES FLEX")
                     # Checamos si la orden entró antes de las 12:00 pm
