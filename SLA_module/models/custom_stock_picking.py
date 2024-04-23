@@ -103,9 +103,11 @@ class Picking(models.Model):
             elif dic_marketplace_info["marketplace"].name.lower().replace(" ", "") == 'shopify':
                 dic_marketplace_info["sameDay_nextDay"] = marketplace_schedule.sameDay_nextDay
 
-                if local_date.time() <= datetime.strptime(limit_hour, '%H:%M:%S').time():
-                    pickUp_date = date + timedelta(minutes=int(dic_marketplace_info["sameDay_nextDay"]))
-                    return pickUp_date
+                # ESTA PARTE SE ACTIVARA CUANDO EL ENVIO SAME-DAYE NEXT-DAY ESTE IMPLEMENTADO
+                # SE EVALUARIA UN IF EXTRA PARA SABER SI ES ESE TIPO DE ENVIO
+                # if local_date.time() <= datetime.strptime(limit_hour, '%H:%M:%S').time():
+                #     pickUp_date = date + timedelta(minutes=int(dic_marketplace_info["sameDay_nextDay"]))
+                #     return pickUp_date
 
 
             print(day_of_week)
