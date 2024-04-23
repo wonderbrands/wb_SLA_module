@@ -15,11 +15,11 @@
                             <field name="monday_to_thursday" string="Lunes a Jueves (horas)"
                                    help="Pickup-date para los días lunes a jueves.  Formato: numero entero de las horas que se sumarán    Ejemplo: 20"/>
                             <field name="friday" string="Viernes (día y hora)"
-                                   help="Pickup-date para el día viernes. Formato: Día hh:mm   Ejemplo: Vienes 12:00:00"/>
+                                   help="Pickup-date para el día viernes. Formato:  Día  hh:mm:ss   Ejemplo: Vienes 12:00:00"/>
                             <field name="saturday" string="Sábado (día y hora)"
-                                   help="Pickup-date para el día sábado. Formato: Día hh:mm    Ejemplo: Sabado 12:00:00"/>
+                                   help="Pickup-date para el día sábado. Formato:  Día  hh:mm:ss    Ejemplo: Sabado 12:00:00"/>
                             <field name="sunday" string="Domingo (día y hora)"
-                                   help="Pickup-date para el día domingo. Formato: Día hh:mm    Ejemplo: Domingo 12:00:00"/>
+                                   help="Pickup-date para el día domingo. Formato:  Día  hh:mm:ss    Ejemplo: Domingo 12:00:00"/>
 <!--                            <field name="mercado_libre_id" invisible="1"/>-->
                             <field name="auxiliar_1" invisible="1"/>
                             <field name="flex" string="Flex (minutos)" attrs="{'invisible': [('auxiliar_1', '!=', 'True')]}"
