@@ -168,24 +168,30 @@ class Picking(models.Model):
         #raise Exception('Mnual RAISE', list_orders)
 
         partner_name = order.partner_id.name
-        fullfilment = order.fulfillment
-        _logger.info("Fulfillment es: " + str(fullfilment) + ', ' + str(type(fullfilment)))
+        fulfillment = order.fulfillment
+        if fulfillment == False:
+            fulfillment = str(fulfillment) # Convertimos a string si el marketplace no tiene el campo fulfillment
         date_order = order.date_order # + timedelta(hours=utc_local)  #UTC -6 CDMX
 
         print(f'partner_name= {partner_name}, origin= {origin}, date_order= {date_order}')
+        _logger.info(f'partner_name= {partner_name}, origin= {origin}, date_order= {date_order}, fulfillment: {str(fulfillment)}')
 
-        return self._compute_pickUp_date(partner_name,date_order, fullfilment)
+        return self._compute_pickUp_date(partner_name,date_order, fulfillment)
 
     def action_confirm(self):
 
-        print(f'\n VALOR DE pickup date: {self._get_order_values()}\n')
+        # print(f'\n VALOR DE pickup date: {self._get_order_values()}\n')
         # Llama al método original para confirmar la operación de recogida
         res = super(Picking, self).action_confirm()
 
         # Establece el valor de pick_up_date al momento de la confirmación
-        for picking in self:
-            pickup_date = self._get_order_values()
-            _logger.info(f'\n\nPICKUPDATE: {pickup_date + timedelta(hours=utc_local)}\n\n')
-            picking.pick_up_date = pickup_date
+        try:
+            for picking in self:
+                pickup_date = self._get_order_values()
+                _logger.info(f'\n\nPICKUPDATE: {pickup_date + timedelta(hours=utc_local)}\n\n')
+                picking.pick_up_date = pickup_date
+        except TypeError as e:
+            picking.pick_up_date = None
+            _logger.info(f'El marketplace (cliente) no tiene un SLA por lo que no se asigna un pickup-date')
 
         return res
