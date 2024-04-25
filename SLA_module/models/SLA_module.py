@@ -8,7 +8,8 @@ class MarketplaceSchedule(models.Model):
     # Definir los campos
     #marketplace = fields.Char(string='Marketplace', required=True)
     marketplace = fields.Many2one('res.partner', string='Marketplace')
-    monday_to_thursday = fields.Char(string='Lunes a Jueves (horas)')
+    crm_team = fields.Many2one('crm.team', string='Equipo de CRM')
+    monday_to_thursday_ = fields.Integer(string='Lunes a Jueves (horas)')
     friday = fields.Char(string='Viernes (día y hora)')
     saturday = fields.Char(string='Sábado (día y hora)')
     sunday = fields.Char(string='Domingo (día y hora)')
@@ -18,15 +19,16 @@ class MarketplaceSchedule(models.Model):
     auxiliar_2 = fields.Char(string='auxiliar2')
     #mercado_libre_id = fields.Char(string='ID de MercadoLibre', compute='_compute_mercado_libre_id', store=True)
 
-    @api.onchange('marketplace')
+    @api.onchange('crm_team')
     def _onchange_marketplace(self):
         print("Dentro de onchage marketplace")
-        if isinstance(self.marketplace.name, str):
-            print("Es un STR o no?", self.marketplace.name, type(self.marketplace.name), self.marketplace.name.lower().replace(" ", ""))
-            if self.marketplace.name.lower().replace(" ", "") == 'mercadolibre':
-                print(self.marketplace.name.lower().replace(" ", ""))
+        if isinstance(self.crm_team.name, str):
+            print("Es un STR o no?", self.crm_team.name, type(self.crm_team.name),
+                  self.crm_team.name.lower().replace(" ", ""))
+            if self.crm_team.name.lower().replace(" ", "") == 'team_mercadolibre':
+                print(self.crm_team.name.lower().replace(" ", ""))
                 self.auxiliar_1 = 'True'
-            elif self.marketplace.name.lower().replace(" ", "") == 'shopify':
+            elif self.crm_team.name.lower().replace(" ", "") == 'team_sitioweb':
                 self.auxiliar_2 = 'True'
             else:
                 'False'

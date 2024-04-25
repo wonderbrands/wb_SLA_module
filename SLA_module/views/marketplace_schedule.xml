@@ -10,9 +10,11 @@
                     <sheet>
                         <group>
                             <!-- Agregar los campos al formulario con descripciones emergentes -->
-                            <field name="marketplace" string="Marketplace"
-                                   help="El nombre del marketplace."/>
-                            <field name="monday_to_thursday" string="Lunes a Jueves (horas)"
+<!--                            <field name="marketplace" string="Marketplace"-->
+<!--                                   help="El nombre del marketplace donde se programará el horario."/>-->
+                            <field name="crm_team" string="Equipo de ventas"
+                                   help="Nombre del equipo de ventas."/>
+                            <field name="monday_to_thursday_" string="Lunes a Jueves (horas)"
                                    help="Pickup-date para los días lunes a jueves.  Formato: numero entero de las horas que se sumarán    Ejemplo: 20"/>
                             <field name="friday" string="Viernes (día y hora)"
                                    help="Pickup-date para el día viernes. Formato:  Día  hh:mm:ss   Ejemplo: Vienes 12:00:00"/>
@@ -39,8 +41,9 @@
             <field name="model">marketplace.schedule</field>
             <field name="arch" type="xml">
                 <tree string="Horarios pickup date ">
-                    <field name="marketplace"/>
-                    <field name="monday_to_thursday"/>
+<!--                    <field name="marketplace"/>-->
+                    <field name="crm_team"/>
+                    <field name="monday_to_thursday_"/>
                     <field name="friday"/>
                     <field name="saturday"/>
                     <field name="sunday"/>
