@@ -9,6 +9,7 @@
                 'stock'],
     'data': [
         'security/ir.model.access.csv',
+        'views/security_SLA.xml',
         'views/marketplace_schedule.xml',
         'views/view_stock_picking_form.xml',
     ],
