@@ -142,7 +142,7 @@ class Picking(models.Model):
                     _logger.info(f'DENTRO DE ["monday", "tuesday", "wednesday", "thursday", "friday"] , HORAS: {day_info}')
                     if day_info >= 0: # Verificamos que el dato sea positivo
                         pickUp_date = date + timedelta(hours=int(day_info))
-                        if team_name == 'team_sales' or team_name == 'mayoreo_NAES':  # Ventas de piso o Mayoreo_NAES
+                        if team_name == 'ventasdepiso' or team_name == 'mayoreo_naes':  # Ventas de piso o Mayoreo_NAES
                             pickUp_date = pickUp_date.replace(hour=15-utc_local, minute=0, second=0) # Hora despues de las 3:00 pm
                             return self._get_business_day(pickUp_date, False)
                         return self._get_business_day(pickUp_date, True)
@@ -154,7 +154,7 @@ class Picking(models.Model):
                         day_info = dic_crm_team_info["saturday"]
                         if day_info >= 0:
                             pickUp_date = date + timedelta(hours=int(day_info))
-                            if team_name == 'team_sales' or team_name == 'mayoreo_NAES':  # Ventas de piso o Mayoreo_NAES
+                            if team_name == 'ventasdepiso' or team_name == 'mayoreo_naes':  # Ventas de piso o Mayoreo_NAES
                                 pickUp_date = pickUp_date.replace(hour=15-utc_local, minute=0, second=0)
                                 return self._get_business_day(pickUp_date, False)
                             return self._get_business_day(pickUp_date, True)
@@ -163,7 +163,7 @@ class Picking(models.Model):
                         day_info = dic_crm_team_info["sunday"]
                         if day_info >= 0:
                             pickUp_date = date + timedelta(hours=int(day_info))
-                            if team_name == 'team_sales' or team_name == 'mayoreo_NAES':  # Ventas de piso o Mayoreo_NAES
+                            if team_name == 'ventasdepiso' or team_name == 'mayoreo_naes':  # Ventas de piso o Mayoreo_NAES
                                 pickUp_date = pickUp_date.replace(hour=15-utc_local, minute=0, second=0)
                                 return self._get_business_day(pickUp_date, False)
                             return self._get_business_day(pickUp_date, True)
