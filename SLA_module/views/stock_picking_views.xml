@@ -7,10 +7,10 @@
           <field name="arch" type="xml">
               <!-- Agrega campos al formulario de Compra -->
               <xpath expr="//field[@name='pick_up_date']" position="before">
-                  <field name="sla_date"/>
+                  <field name="sla_date" attrs="{'invisible': ['|','|', ('name','=ilike','/OUT/'), ('name','=ilike','/IN/'), ('name','=ilike','/RET/') ]}"/>
               </xpath>
               <xpath expr="//field[@name='pick_up_date']" position="after">
-                  <field name="priority_date"/>
+                  <field name="priority_date" attrs="{'invisible': ['|','|', ('name','=ilike','/OUT/'), ('name','=ilike','/IN/'), ('name','=ilike','/RET/') ]}"/>
               </xpath>
 
               </field>
