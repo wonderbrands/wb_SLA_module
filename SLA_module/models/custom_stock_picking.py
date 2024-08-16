@@ -114,8 +114,22 @@ class Picking(models.Model):
                     #print("ES FLEX")
                     _logger.info("ES FLEX")
                     # NO SE COLOCA HASTA QUE SE PISE CON LA DE MELI
-                    sla_value_date = None
-                    return self._auto_fill_dates_method(auto_fill_dates, sla_value_date)
+                    _logger.info(local_date.time())
+                    if int(dic_crm_team_info["flex"]) > 0:
+                        if local_date.time() <= datetime.strptime(limit_hour, '%H:%M:%S').time():
+                            _logger.info("Son menos de las ", limit_hour, " y se entregara hoy + x minutos")
+                            sla_value_date = date + timedelta(minutes=int(dic_crm_team_info["flex"]))  # fecha orden + tiempo definido en schedule
+                            return self._auto_fill_dates_method(auto_fill_dates, sla_value_date)
+                        # Si la orden entró después de las 12:00 pm
+                        else:
+                            # print("Son mas de las ", limit_hour, " y se entregara maniana al final del dia")
+                            _logger.info("Son mas de las ", limit_hour, " y se entregara maniana al final del dia")
+                            sla_value_date = local_date.replace(hour=0, minute=0, second=0)
+                            sla_value_date = sla_value_date + timedelta(hours=(int(24 + (23 - utc_local))), minutes=int(59), seconds=int(00))  # Setea pickup date al dia siguiente a las 23:59 pm
+                            return self._auto_fill_dates_method(auto_fill_dates, sla_value_date)
+                    else:
+                        sla_value_date = None
+                        return self._auto_fill_dates_method(auto_fill_dates, sla_value_date)
 
                 else: # SI NO ES FLEX (COLECTA)
                     if day_of_week in ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']:
