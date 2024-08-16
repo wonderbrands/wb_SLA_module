@@ -135,14 +135,14 @@ class Picking(models.Model):
                     if day_of_week in ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']:
                         day_info = dic_crm_team_info["monday to friday"]
                         if day_info >= 0:  # Verificamos que el dato sea positivo
-                            sla_value_date = date + timedelta(hours=int(day_info)) + timedelta(hours=utc_local)
+                            sla_value_date = local_date + timedelta(hours=int(day_info))
                             sla_value_date = sla_value_date.replace(hour=12 - utc_local, minute=0, second=0)
                             sla_value_date =  self._get_business_day(sla_value_date, False)
                             return self._auto_fill_dates_method(auto_fill_dates, sla_value_date)
                     elif day_of_week == 'saturday':
                         day_info = dic_crm_team_info['satuday']
                         if day_info >= 0:  # Verificamos que el dato sea positivo
-                            sla_value_date = date + timedelta(hours=int(day_info)) + timedelta(hours=utc_local)
+                            sla_value_date = local_date + timedelta(hours=int(day_info))
                             sla_value_date = sla_value_date.replace(hour=12 - utc_local, minute=0, second=0)
                             sla_value_date = self._get_business_day(sla_value_date, False)
                             return self._auto_fill_dates_method(auto_fill_dates, sla_value_date)
@@ -150,7 +150,7 @@ class Picking(models.Model):
                     elif day_of_week == 'sunday':
                         day_info = dic_crm_team_info['sunday']
                         if day_info >= 0:  # Verificamos que el dato sea positivo
-                            sla_value_date = date + timedelta(hours=int(day_info)) + timedelta(hours=utc_local)
+                            sla_value_date = local_date + timedelta(hours=int(day_info))
                             sla_value_date = sla_value_date.replace(hour=12 - utc_local, minute=0, second=0)
                             sla_value_date = self._get_business_day(sla_value_date, False)
                             return self._auto_fill_dates_method(auto_fill_dates, sla_value_date)
@@ -170,13 +170,13 @@ class Picking(models.Model):
                     day_info = dic_crm_team_info["monday to friday"]
                     _logger.info(f'DENTRO DE ["monday", "tuesday", "wednesday", "thursday", "friday"] , HORAS: {day_info}')
                     if day_info >= 0: # Verificamos que el dato sea positivo
-                        sla_value_date = date + timedelta(hours=int(day_info))
+                        sla_value_date = local_date + timedelta(hours=int(day_info))
                         if team_name == 'ventasdepiso' or team_name == 'mayoreo_naes':  # Ventas de piso o Mayoreo_NAES
                             sla_value_date = sla_value_date + timedelta(hours=utc_local)
                             sla_value_date = sla_value_date.replace(hour=15-utc_local, minute=0, second=0) # Hora despues de las 3:00 pm
                             sla_value_date = self._get_business_day(sla_value_date, False)
                             return self._auto_fill_dates_method(auto_fill_dates, sla_value_date)
-                        sla_value_date = self._get_business_day(sla_value_date, True)
+                        sla_value_date = (self._get_business_day(sla_value_date, True)) - timedelta(hours=utc_local)
                         return self._auto_fill_dates_method(auto_fill_dates, sla_value_date)
                     else:
                         raise ValueError("El formato del matketplace schedule es incorrecto, verificar que sea un numero de horas válido")
@@ -185,25 +185,25 @@ class Picking(models.Model):
                     if day_of_week == 'saturday':
                         day_info = dic_crm_team_info["saturday"]
                         if day_info >= 0:
-                            sla_value_date = date + timedelta(hours=int(day_info))
+                            sla_value_date = local_date + timedelta(hours=int(day_info))
                             if team_name == 'ventasdepiso' or team_name == 'mayoreo_naes':  # Ventas de piso o Mayoreo_NAES
                                 sla_value_date = sla_value_date + timedelta(hours=utc_local)
                                 sla_value_date = sla_value_date.replace(hour=15-utc_local, minute=0, second=0)
                                 sla_value_date = self._get_business_day(sla_value_date, False)
                                 return self._auto_fill_dates_method(auto_fill_dates, sla_value_date)
-                            sla_value_date = self._get_business_day(sla_value_date, True)
+                            sla_value_date = (self._get_business_day(sla_value_date, True)) - timedelta(hours=utc_local)
                             return self._auto_fill_dates_method(auto_fill_dates, sla_value_date)
 
                     elif day_of_week == 'sunday':
                         day_info = dic_crm_team_info["sunday"]
                         if day_info >= 0:
-                            sla_value_date = date + timedelta(hours=int(day_info))
+                            sla_value_date = local_date + timedelta(hours=int(day_info))
                             if team_name == 'ventasdepiso' or team_name == 'mayoreo_naes':  # Ventas de piso o Mayoreo_NAES
                                 sla_value_date = sla_value_date + timedelta(hours=utc_local)
                                 sla_value_date = sla_value_date.replace(hour=15-utc_local, minute=0, second=0)
                                 sla_value_date = self._get_business_day(sla_value_date, False)
                                 return self._auto_fill_dates_method(auto_fill_dates, sla_value_date)
-                            sla_value_date = self._get_business_day(sla_value_date, True)
+                            sla_value_date = (self._get_business_day(sla_value_date, True)) - timedelta(hours=utc_local)
                             return self._auto_fill_dates_method(auto_fill_dates, sla_value_date)
                     else:
                         raise("Este equipo de ventas no tiene un SLA asignado para la fecha de hoy")
