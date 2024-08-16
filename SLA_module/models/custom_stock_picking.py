@@ -15,10 +15,10 @@ utc_local = -6 #UTC CDMX
 class Picking(models.Model):
     _inherit = 'stock.picking'
 
-    #pick_up_date = fields.Datetime(string="Pick-Up Date",help='Field that show the Pick-Up date')
+    #sla_date = fields.Datetime(string="Pick-Up Date",help='Field that show the Pick-Up date')
     crm_team_info = fields.Text(string="crm_team Information", compute="_compute_crm_team_info")
 
-    @api.depends('pick_up_date')
+    @api.depends('sla_date')
     def _get_timeDelta_days(self, init_day, goal_day):
         days_of_week = {
             "monday": 0,
@@ -39,30 +39,36 @@ class Picking(models.Model):
 
         return (days_of_week[goal_day.lower()] - days_of_week[init_day.lower()]) % 7
 
-    @api.depends('pick_up_date')
-    def _get_business_day(self, pickUp_date, restrict_only_sunday):
+    @api.depends('sla_date')
+    def _get_business_day(self, sla_value_date, restrict_only_sunday):
         if restrict_only_sunday:
-            if pickUp_date.weekday() == 6:  # 6 Si pickupdate es domingo vamonos al Lunes
-                pickUp_date = pickUp_date + timedelta(hours=24)
-                return pickUp_date
+            if sla_value_date.weekday() == 6:  # 6 Si sla_date es domingo vamonos al Lunes
+                sla_value_date = sla_value_date + timedelta(hours=24)
+                return sla_value_date
             else:
-                return pickUp_date
+                return sla_value_date
         else:
-            if pickUp_date.weekday() == 5:  # 5 Si pickupdate es sabado vamonos al Lunes
-                pickUp_date = pickUp_date + timedelta(hours=48)
-                return pickUp_date
-            elif pickUp_date.weekday() == 6:  # 6 Si pickupdate es domingo vamonos al Lunes
-                pickUp_date = pickUp_date + timedelta(hours=24)
-                return pickUp_date
+            if sla_value_date.weekday() == 5:  # 5 Sisladate es sabado vamonos al Lunes
+                sla_value_date = sla_value_date + timedelta(hours=48)
+                return sla_value_date
+            elif sla_value_date.weekday() == 6:  # 6 Si sla_date es domingo vamonos al Lunes
+                sla_value_date = sla_value_date + timedelta(hours=24)
+                return sla_value_date
             else:
-                return pickUp_date
+                return sla_value_date
 
+    @api.depends('sla_date')
+    def _auto_fill_dates_method(self, auto_fill_dates, sla_date):
+        if auto_fill_dates:
+            return sla_date,sla_date,sla_date
+        else:
+            return sla_date, None, None
 
-    @api.depends('pick_up_date')
-    def _compute_pickUp_date(self, crm_team, date, fullfilment):
+    @api.depends('sla_date')
+    def _compute_sla_value_date(self, crm_team, date, fullfilment):
         # El parametro 'crm_team' es crm_team de sales.order (equipo de ventas)
         """
-            Calcula la fecha de pickup date de acuerdo al schedule del modelo marketplace.schedule
+            Calcula la fecha de SLA date de acuerdo al schedule del modelo marketplace.schedule
         """
 
         # Esta variable se usa para hacer calculos precisos con date harcodeada, ya que la hora que
@@ -87,13 +93,15 @@ class Picking(models.Model):
                             "monday to friday": crm_team_schedule.monday_to_friday_,
                             "saturday": crm_team_schedule.saturday,
                             "sunday": crm_team_schedule.sunday,
+                            "auto_fill_dates":crm_team_schedule.auto_fill_dates,
                         }
             else:
                 dic_crm_team_info = "No crm_team schedule found."
 
 
         try:
-
+            # Si el check esta activo, el valor de sla_date, pick_up_date y priority_date sera el mismo
+            auto_fill_dates = dic_crm_team_info["auto_fill_dates"]
             team_name = dic_crm_team_info["crm_team"].name.lower().replace(" ", "")
             # Checamos si el crm_team es Team Mercado Libre
             if team_name == 'team_mercadolibre':
@@ -106,46 +114,55 @@ class Picking(models.Model):
                     #print("ES FLEX")
                     _logger.info("ES FLEX")
                     # NO SE COLOCA HASTA QUE SE PISE CON LA DE MELI
-                    pickUp_date = None
-                    return pickUp_date
+                    sla_value_date = None
+                    return self._auto_fill_dates_method(auto_fill_dates, sla_value_date)
 
                 else: # SI NO ES FLEX (COLECTA)
                     if day_of_week in ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']:
                         day_info = dic_crm_team_info["monday to friday"]
                         if day_info >= 0:  # Verificamos que el dato sea positivo
-                            pickUp_date = date + timedelta(hours=int(day_info))
-                            pickUp_date = pickUp_date.replace(hour=12 - utc_local, minute=0, second=0)
-                            return self._get_business_day(pickUp_date, False)
+                            sla_value_date = date + timedelta(hours=int(day_info))
+                            sla_value_date = sla_value_date.replace(hour=12 - utc_local, minute=0, second=0)
+                            sla_value_date =  self._get_business_day(sla_value_date, False)
+                            return self._auto_fill_dates_method(auto_fill_dates, sla_value_date)
                     elif day_of_week == 'saturday':
                         day_info = dic_crm_team_info['satuday']
                         if day_info >= 0:  # Verificamos que el dato sea positivo
-                            pickUp_date = date + timedelta(hours=int(day_info))
-                            pickUp_date = pickUp_date.replace(hour=12 - utc_local, minute=0, second=0)
-                            return self._get_business_day(pickUp_date, False)
+                            sla_value_date = date + timedelta(hours=int(day_info))
+                            sla_value_date = sla_value_date.replace(hour=12 - utc_local, minute=0, second=0)
+                            sla_value_date = self._get_business_day(sla_value_date, False)
+                            return self._auto_fill_dates_method(auto_fill_dates, sla_value_date)
 
                     elif day_of_week == 'sunday':
                         day_info = dic_crm_team_info['sunday']
                         if day_info >= 0:  # Verificamos que el dato sea positivo
-                            pickUp_date = date + timedelta(hours=int(day_info))
-                            pickUp_date = pickUp_date.replace(hour=12 - utc_local, minute=0, second=0)
-                            return self._get_business_day(pickUp_date, False)
+                            sla_value_date = date + timedelta(hours=int(day_info))
+                            sla_value_date = sla_value_date.replace(hour=12 - utc_local, minute=0, second=0)
+                            sla_value_date = self._get_business_day(sla_value_date, False)
+                            return self._auto_fill_dates_method(auto_fill_dates, sla_value_date)
 
-            elif team_name == 'team_amazon':
-                pickUp_date = None
-                return pickUp_date
+            # ACTIVAR HASTA QUE SE TENGA ALGUNA LOGICA ESPECIFICA DE AMAZON
+            # MIENTRAS, AMAZON TIENE LA MISMA LOGICA QUE EL RESTO DE EQUIPOS
+            # elif team_name == 'team_amazon':
+            #     sla_value_date = None
+            #     return self._auto_fill_dates_method(auto_fill_dates, sla_value_date)
 
-            else: # RESTO DE EQUIPOS
+
+            # RESTO DE EQUIPOS
+            else:
                 _logger.info(f'{day_of_week}')
                 if day_of_week in ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']:
                     print("DENTRO DE ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'] ")
                     day_info = dic_crm_team_info["monday to friday"]
                     _logger.info(f'DENTRO DE ["monday", "tuesday", "wednesday", "thursday", "friday"] , HORAS: {day_info}')
                     if day_info >= 0: # Verificamos que el dato sea positivo
-                        pickUp_date = date + timedelta(hours=int(day_info))
+                        sla_value_date = date + timedelta(hours=int(day_info))
                         if team_name == 'ventasdepiso' or team_name == 'mayoreo_naes':  # Ventas de piso o Mayoreo_NAES
-                            pickUp_date = pickUp_date.replace(hour=15-utc_local, minute=0, second=0) # Hora despues de las 3:00 pm
-                            return self._get_business_day(pickUp_date, False)
-                        return self._get_business_day(pickUp_date, True)
+                            sla_value_date = sla_value_date.replace(hour=15-utc_local, minute=0, second=0) # Hora despues de las 3:00 pm
+                            sla_value_date = self._get_business_day(sla_value_date, False)
+                            return self._auto_fill_dates_method(auto_fill_dates, sla_value_date)
+                        sla_value_date = self._get_business_day(sla_value_date, True)
+                        return self._auto_fill_dates_method(auto_fill_dates, sla_value_date)
                     else:
                         raise ValueError("El formato del matketplace schedule es incorrecto, verificar que sea un numero de horas válido")
                 else: # Fin de semana
@@ -153,32 +170,36 @@ class Picking(models.Model):
                     if day_of_week == 'saturday':
                         day_info = dic_crm_team_info["saturday"]
                         if day_info >= 0:
-                            pickUp_date = date + timedelta(hours=int(day_info))
+                            sla_value_date = date + timedelta(hours=int(day_info))
                             if team_name == 'ventasdepiso' or team_name == 'mayoreo_naes':  # Ventas de piso o Mayoreo_NAES
-                                pickUp_date = pickUp_date.replace(hour=15-utc_local, minute=0, second=0)
-                                return self._get_business_day(pickUp_date, False)
-                            return self._get_business_day(pickUp_date, True)
+                                sla_value_date = sla_value_date.replace(hour=15-utc_local, minute=0, second=0)
+                                sla_value_date = self._get_business_day(sla_value_date, False)
+                                return self._auto_fill_dates_method(auto_fill_dates, sla_value_date)
+                            sla_value_date = self._get_business_day(sla_value_date, True)
+                            return self._auto_fill_dates_method(auto_fill_dates, sla_value_date)
 
                     elif day_of_week == 'sunday':
                         day_info = dic_crm_team_info["sunday"]
                         if day_info >= 0:
-                            pickUp_date = date + timedelta(hours=int(day_info))
+                            sla_value_date = date + timedelta(hours=int(day_info))
                             if team_name == 'ventasdepiso' or team_name == 'mayoreo_naes':  # Ventas de piso o Mayoreo_NAES
-                                pickUp_date = pickUp_date.replace(hour=15-utc_local, minute=0, second=0)
-                                return self._get_business_day(pickUp_date, False)
-                            return self._get_business_day(pickUp_date, True)
+                                sla_value_date = sla_value_date.replace(hour=15-utc_local, minute=0, second=0)
+                                sla_value_date = self._get_business_day(sla_value_date, False)
+                                return self._auto_fill_dates_method(auto_fill_dates, sla_value_date)
+                            sla_value_date = self._get_business_day(sla_value_date, True)
+                            return self._auto_fill_dates_method(auto_fill_dates, sla_value_date)
                     else:
                         raise("Este equipo de ventas no tiene un SLA asignado para la fecha de hoy")
 
         except KeyError as e:
-            print(f'Error en crm_team_id, no existe un schedule pickup date para "{crm_team}", Error: ', e)
+            print(f'Error en crm_team_id, no existe un schedule SLA date para "{crm_team}", Error: ', e)
         except TypeError as e:
             print(f'Error de formato, Error: ', e)
         # except ValueError as e:
         #     print('El formato del crm_team schedule es incorrecto, verificar, Error: ', e)
         #     raise Exception("Este es mi mensaje de error")
 
-    @api.depends('pick_up_date')
+    @api.depends('sla_date')
     def _get_order_values(self):
         """
             Se hace una busqueda en los registros de sale.order para la orden que se esta trabajando
@@ -210,7 +231,7 @@ class Picking(models.Model):
         except:
             raise ("Error al obtener la informacion de la orden")
 
-        return self._compute_pickUp_date(crm_team,date_order, fulfillment)
+        return self._compute_sla_value_date(crm_team,date_order, fulfillment)
 
     def action_confirm(self):
 
@@ -218,14 +239,16 @@ class Picking(models.Model):
         # Llama al método original para confirmar la operación de recogida
         res = super(Picking, self).action_confirm()
 
-        # Establece el valor de pick_up_date al momento de la confirmación
+        # Establece el valor de sla_date al momento de la confirmación
         try:
             for picking in self:
-                pickup_date = self._get_order_values()
-                _logger.info(f'PICKUPDATE: {pickup_date + timedelta(hours=utc_local)}\n')
-                picking.pick_up_date = pickup_date
+                sla_value_date, pick_up_date, priority_date = self._get_order_values()
+                _logger.info(f'SLA_DATE: {sla_value_date + timedelta(hours=utc_local)}\n')
+                picking.sla_date = sla_value_date
+                picking.pick_up_date = pick_up_date
+                picking.priority_date = priority_date
         except TypeError as e:
-            picking.pick_up_date = None
-            _logger.info(f'El team no tiene un SLA por lo que no se asigna un pickup-date: {e}')
+            picking.sla_date = None
+            _logger.info(f'El team no tiene un SLA por lo que no se asigna un SLA-date: {e}')
 
         return res

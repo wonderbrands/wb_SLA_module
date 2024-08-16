@@ -6,7 +6,7 @@
             <field name="name">marketplace.schedule.form</field>
             <field name="model">marketplace.schedule</field>
             <field name="arch" type="xml">
-                <form string="Esquema de horarios para pickup-date">
+                <form string="Esquema de horarios para SLA-date">
                     <sheet>
                         <group>
                             <!-- Agregar los campos al formulario con descripciones emergentes -->
@@ -15,18 +15,21 @@
                             <field name="crm_team" string="Equipo de ventas"
                                    help="Nombre del equipo de ventas."/>
                             <field name="monday_to_friday_" string="Lunes a Viernes (horas)"
-                                   help="Pickup-date para los días lunes a viernes.  Formato: numero entero de las horas que se sumarán    Ejemplo: 20"/>
+                                   help="SLA-date para los días lunes a viernes.  Formato: numero entero de las horas que se sumarán    Ejemplo: 20"/>
                             <field name="saturday" string="Sábado (horas)"
-                                   help="Pickup-date para el día sábado. Formato: numero entero de las horas que se sumarán    Ejemplo: 20"/>
+                                   help="SLA-date para el día sábado. Formato: numero entero de las horas que se sumarán    Ejemplo: 20"/>
                             <field name="sunday" string="Domingo (horas)"
-                                   help="Pickup-date para el día domingo. Formato: numero entero de las horas que se sumarán    Ejemplo: 20"/>
-<!--                            <field name="mercado_libre_id" invisible="1"/>-->
+                                   help="SLA-date para el día domingo. Formato: numero entero de las horas que se sumarán    Ejemplo: 20"/>
+                            <!--                            <field name="mercado_libre_id" invisible="1"/>-->
                             <field name="auxiliar_1" invisible="1"/>
                             <field name="flex" string="Flex (minutos)" attrs="{'invisible': [('auxiliar_1', '!=', 'True')]}"
                                    help="Este campo solo es para mercado libre con envio Flex"/>
                             <field name="auxiliar_2" invisible="1"/>
                             <field name="sameDay_nextDay" string="Same-day/Next-day (minutos)" attrs="{'invisible': [('auxiliar_2', '!=', 'True')]}"
                                    help="Este campo solo es para Shopify con envio Same day / Next day"/>
+                            <field name="auto_fill_dates" string="Auto-completado de fechas"
+                                   help="Indica si los campos SLA date, Pick-up date y Priority serán iguales."/>
+
                         </group>
                     </sheet>
                 </form>
@@ -38,7 +41,7 @@
             <field name="name">marketplace.schedule.tree</field>
             <field name="model">marketplace.schedule</field>
             <field name="arch" type="xml">
-                <tree string="Horarios pickup date ">
+                <tree string="Horarios SLA date ">
 <!--                    <field name="marketplace"/>-->
                     <field name="crm_team"/>
                     <field name="monday_to_friday_"/>
@@ -48,6 +51,7 @@
                     <field name="auxiliar_2" invisible="1"/>
                     <field name="flex" attrs="{'invisible': [('auxiliar_1', '!=', 'True')]}"/>
                     <field name="sameDay_nextDay" attrs="{'invisible': [('auxiliar_2', '!=', 'True')]}"/>
+                    <field name="auto_fill_dates"/>
 <!--                    <field name="mercado_libre_id" invisible="1"/>-->
                 </tree>
             </field>
@@ -55,7 +59,7 @@
 
         <!-- Definir la acción para acceder a la vista de lista -->
         <record id="action_marketplace_schedule" model="ir.actions.act_window">
-            <field name="name">Esquema de horarios para pickup-date</field>
+            <field name="name">Esquema de horarios para SLA-date</field>
             <field name="res_model">marketplace.schedule</field>
             <field name="view_mode">tree,form</field>
             <field name="view_id" ref="view_marketplace_schedule_tree"/>
@@ -68,8 +72,8 @@
         </record>
 
         <!-- Definir el menú para acceder al modelo -->
-        <menuitem id="menu_marketplace_schedule" name="Esquema de horarios para pickup-date" parent="sale.sale_menu_root" sequence="20" groups="SLA_module.group_pickup_date_user"/>
-        <menuitem id="menu_marketplace_schedule_list" name="Esquema de horarios para pickup-date" parent="menu_marketplace_schedule" action="action_marketplace_schedule"/>
+        <menuitem id="menu_marketplace_schedule" name="Esquema de horarios para SLA-date" parent="sale.sale_menu_root" sequence="20" groups="SLA_module.group_sla_date_user"/>
+        <menuitem id="menu_marketplace_schedule_list" name="Esquema de horarios para SLA-date" parent="menu_marketplace_schedule" action="action_marketplace_schedule"/>
 
     </data>
 </odoo>

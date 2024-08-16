@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <record id="group_pickup_date_user" model="res.groups">
-        <field name="name">Acceso a pickup-date</field>
+    <record id="group_sla_date_user" model="res.groups">
+        <field name="name">Acceso a SLA-date</field>
         <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
     </record>
 </odoo>
