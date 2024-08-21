@@ -113,19 +113,18 @@ class Picking(models.Model):
                 if fullfilment.lower() == "fbf":
                     #print("ES FLEX")
                     _logger.info("ES FLEX")
-                    # NO SE COLOCA HASTA QUE SE PISE CON LA DE MELI
+                    # Nuevo SLA
                     _logger.info(local_date.time())
                     if int(dic_crm_team_info["flex"]) > 0:
                         if local_date.time() <= datetime.strptime(limit_hour, '%H:%M:%S').time():
-                            _logger.info("Son menos de las ", limit_hour, " y se entregara hoy + x minutos")
+                            _logger.info("Son menos de las ", limit_hour, f" y se entregara hoy + {str(dic_crm_team_info['flex'])} minutos")
                             sla_value_date = date + timedelta(minutes=int(dic_crm_team_info["flex"]))  # fecha orden + tiempo definido en schedule
                             return self._auto_fill_dates_method(auto_fill_dates, sla_value_date)
                         # Si la orden entró después de las 12:00 pm
                         else:
-                            # print("Son mas de las ", limit_hour, " y se entregara maniana al final del dia")
-                            _logger.info("Son mas de las ", limit_hour, " y se entregara maniana al final del dia")
+                            _logger.info("Son mas de las ", limit_hour, " y se entregara el siguinete dia")
                             sla_value_date = local_date.replace(hour=0, minute=0, second=0)
-                            sla_value_date = sla_value_date + timedelta(hours=(int(24 + (23 - utc_local))), minutes=int(59), seconds=int(00))  # Setea pickup date al dia siguiente a las 23:59 pm
+                            sla_value_date = sla_value_date + timedelta(hours=(int(24 + (11 - utc_local))), minutes=int(59), seconds=int(59))  # Setea SLA date al dia siguiente a las 11:59Ñ59 am
                             return self._auto_fill_dates_method(auto_fill_dates, sla_value_date)
                     else:
                         sla_value_date = None
@@ -155,11 +154,29 @@ class Picking(models.Model):
                             sla_value_date = self._get_business_day(sla_value_date, False)
                             return self._auto_fill_dates_method(auto_fill_dates, sla_value_date)
 
-            # ACTIVAR HASTA QUE SE TENGA ALGUNA LOGICA ESPECIFICA DE AMAZON
-            # MIENTRAS, AMAZON TIENE LA MISMA LOGICA QUE EL RESTO DE EQUIPOS
-            # elif team_name == 'team_amazon':
-            #     sla_value_date = None
-            #     return self._auto_fill_dates_method(auto_fill_dates, sla_value_date)
+            elif team_name == 'team_amazon':
+                if day_of_week in ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']:
+                    day_info = dic_crm_team_info["monday to friday"]
+                    if day_info >= 0:  # Verificamos que el dato sea positivo
+                        sla_value_date = local_date + timedelta(hours=int(day_info))
+                        sla_value_date = sla_value_date.replace(hour=12 - utc_local, minute=0, second=0)
+                        sla_value_date = self._get_business_day(sla_value_date, False)
+                        return self._auto_fill_dates_method(auto_fill_dates, sla_value_date)
+                elif day_of_week == 'saturday':
+                    day_info = dic_crm_team_info['satuday']
+                    if day_info >= 0:  # Verificamos que el dato sea positivo
+                        sla_value_date = local_date + timedelta(hours=int(day_info))
+                        sla_value_date = sla_value_date.replace(hour=12 - utc_local, minute=0, second=0)
+                        sla_value_date = self._get_business_day(sla_value_date, False)
+                        return self._auto_fill_dates_method(auto_fill_dates, sla_value_date)
+
+                elif day_of_week == 'sunday':
+                    day_info = dic_crm_team_info['sunday']
+                    if day_info >= 0:  # Verificamos que el dato sea positivo
+                        sla_value_date = local_date + timedelta(hours=int(day_info))
+                        sla_value_date = sla_value_date.replace(hour=12 - utc_local, minute=0, second=0)
+                        sla_value_date = self._get_business_day(sla_value_date, False)
+                        return self._auto_fill_dates_method(auto_fill_dates, sla_value_date)
 
 
             # RESTO DE EQUIPOS
