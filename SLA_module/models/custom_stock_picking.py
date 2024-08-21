@@ -117,12 +117,12 @@ class Picking(models.Model):
                     _logger.info(local_date.time())
                     if int(dic_crm_team_info["flex"]) > 0:
                         if local_date.time() <= datetime.strptime(limit_hour, '%H:%M:%S').time():
-                            _logger.info("Son menos de las ", limit_hour, f" y se entregara hoy + {str(dic_crm_team_info['flex'])} minutos")
+                            _logger.info(f'Son menos de las , {limit_hour},  y se entregara hoy + {str(dic_crm_team_info["flex"])} minutos')
                             sla_value_date = date + timedelta(minutes=int(dic_crm_team_info["flex"]))  # fecha orden + tiempo definido en schedule
                             return self._auto_fill_dates_method(auto_fill_dates, sla_value_date)
                         # Si la orden entró después de las 12:00 pm
                         else:
-                            _logger.info("Son mas de las ", limit_hour, " y se entregara el siguinete dia")
+                            _logger.info(f'Son mas de las , {limit_hour},  y se entregara el siguinete dia')
                             sla_value_date = local_date.replace(hour=0, minute=0, second=0)
                             sla_value_date = sla_value_date + timedelta(hours=(int(24 + (11 - utc_local))), minutes=int(59), seconds=int(59))  # Setea SLA date al dia siguiente a las 11:59Ñ59 am
                             return self._auto_fill_dates_method(auto_fill_dates, sla_value_date)
