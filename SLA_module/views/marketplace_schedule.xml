@@ -27,8 +27,8 @@
                             <field name="auxiliar_2" invisible="1"/>
                             <field name="sameDay_nextDay" string="Same-day/Next-day (minutos)" attrs="{'invisible': [('auxiliar_2', '!=', 'True')]}"
                                    help="Este campo solo es para Shopify con envio Same day / Next day"/>
-                            <field name="auto_fill_dates" string="Auto-completado de fechas"
-                                   help="Indica si los campos SLA date, Pick-up date y Priority serán iguales."/>
+                            <field name="auto_fill_dates" string="Auto-completado de Priority-date"
+                                   help="Indica si los campos SLA date y Priority serán iguales."/>
 
                         </group>
                     </sheet>

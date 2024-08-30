@@ -13,7 +13,7 @@ class MarketplaceSchedule(models.Model):
     #friday = fields.Char(string='Viernes (día y hora)')
     saturday = fields.Integer(string='Sábado (horas)')
     sunday = fields.Integer(string='Domingo (horas)')
-    auto_fill_dates = fields.Boolean(string="Auto-completado de fechas", default=False)
+    auto_fill_dates = fields.Boolean(string="Auto-completado de Priority-date", default=False)
     flex = fields.Integer(string='Flex (minutos)')
     sameDay_nextDay = fields.Integer(string='Same-day/Next-day (minutos)')
     auxiliar_1 = fields.Char(string='auxiliar1')
@@ -26,7 +26,7 @@ class MarketplaceSchedule(models.Model):
         if isinstance(self.crm_team.name, str):
             print("Es un STR o no?", self.crm_team.name, type(self.crm_team.name),
                   self.crm_team.name.lower().replace(" ", ""))
-            if self.crm_team.name.lower().replace(" ", "") == 'team_mercadolibre':
+            if self.crm_team.name.lower().replace(" ", "") == 'team_mercadolibre' or self.crm_team.name.lower().replace(" ", "") == 'team_mercadolibre_skybrands':
                 print(self.crm_team.name.lower().replace(" ", ""))
                 self.auxiliar_1 = 'True'
             elif self.crm_team.name.lower().replace(" ", "") == 'team_sitioweb':

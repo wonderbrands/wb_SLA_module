@@ -60,9 +60,9 @@ class Picking(models.Model):
     @api.depends('sla_date')
     def _auto_fill_dates_method(self, auto_fill_dates, sla_date):
         if auto_fill_dates:
-            return sla_date,sla_date,sla_date
+            return sla_date,None,sla_date # sla_date, pickup_date, priority_date
         else:
-            return sla_date, None, None
+            return sla_date, None, None # sla_date, pickup_date, priority_date
 
     @api.depends('sla_date')
     def _compute_sla_value_date(self, crm_team, date, fullfilment):
@@ -104,7 +104,7 @@ class Picking(models.Model):
             auto_fill_dates = dic_crm_team_info["auto_fill_dates"]
             team_name = dic_crm_team_info["crm_team"].name.lower().replace(" ", "")
             # Checamos si el crm_team es Team Mercado Libre
-            if team_name == 'team_mercadolibre':
+            if team_name == 'team_mercadolibre' or team_name == 'team_mercadolibre_skybrands':
                 #print("ES MERCADO LIBRE")
                 _logger.info("ES MERCADO LIBRE")
 
