@@ -16,7 +16,7 @@ class Picking(models.Model):
     _inherit = 'stock.picking'
 
     #sla_date = fields.Datetime(string="Pick-Up Date",help='Field that show the Pick-Up date')
-    crm_team_info = fields.Text(string="crm_team Information", compute="_compute_crm_team_info")
+    #crm_team_info = fields.Text(string="crm_team Information", compute="_compute_crm_team_info")
 
     @api.depends('sla_date')
     def _get_timeDelta_days(self, init_day, goal_day):
