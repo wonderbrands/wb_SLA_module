@@ -1,1 +1,2 @@
-from . import stock_picking, SLA_module, custom_stock_picking
+from . import SLA_module
+from . import stock_picking

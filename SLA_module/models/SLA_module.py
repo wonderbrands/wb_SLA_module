@@ -4,32 +4,38 @@ from odoo import models, fields, api
 class MarketplaceSchedule(models.Model):
     _name = 'marketplace.schedule'
     _description = 'Marketplace Schedule'
+    _rec_name = 'crm_team'
 
-    # Definir los campos
-    #marketplace = fields.Char(string='Marketplace', required=True)
-    marketplace = fields.Many2one('res.partner', string='Marketplace')
-    crm_team = fields.Many2one('crm.team', string='Equipo de ventas')
+    # marketplace = fields.Many2one('res.partner', string='Marketplace') # Comentado en tu original
+    crm_team = fields.Many2one('crm.team', string='Equipo de ventas', required=True)
+    
     monday_to_friday_ = fields.Integer(string='Lunes a Viernes (horas)')
-    #friday = fields.Char(string='Viernes (día y hora)')
     saturday = fields.Integer(string='Sábado (horas)')
     sunday = fields.Integer(string='Domingo (horas)')
+    
     auto_fill_dates = fields.Boolean(string="Auto-completado de Priority-date", default=False)
+    
+    # Campos condicionales
     flex = fields.Integer(string='Flex (minutos)')
     sameDay_nextDay = fields.Integer(string='Same-day/Next-day (minutos)')
-    auxiliar_1 = fields.Char(string='auxiliar1')
-    auxiliar_2 = fields.Char(string='auxiliar2')
-    #mercado_libre_id = fields.Char(string='ID de MercadoLibre', compute='_compute_mercado_libre_id', store=True)
+    
+    # Auxiliares para control de vista (Invisible logic)
+    auxiliar_1 = fields.Char(string='Es MercadoLibre', store=True)
+    auxiliar_2 = fields.Char(string='Es Sitio Web', store=True)
 
     @api.onchange('crm_team')
-    def _onchange_marketplace(self):
-        print("Dentro de onchage marketplace")
-        if isinstance(self.crm_team.name, str):
-            print("Es un STR o no?", self.crm_team.name, type(self.crm_team.name),
-                  self.crm_team.name.lower().replace(" ", ""))
-            if self.crm_team.name.lower().replace(" ", "") == 'team_mercadolibre' or self.crm_team.name.lower().replace(" ", "") == 'team_mercadolibre_skybrands':
-                print(self.crm_team.name.lower().replace(" ", ""))
+    def _onchange_crm_team(self):
+        if self.crm_team and self.crm_team.name:
+            team_clean = self.crm_team.name.lower().replace(" ", "")
+            
+            # Lógica para Mercado Libre
+            if 'mercadolibre' in team_clean:
                 self.auxiliar_1 = 'True'
-            elif self.crm_team.name.lower().replace(" ", "") == 'team_sitioweb':
+            else:
+                self.auxiliar_1 = 'False'
+            
+            # Lógica para Sitio Web
+            if 'sitioweb' in team_clean:
                 self.auxiliar_2 = 'True'
             else:
-                'False'
+                self.auxiliar_2 = 'False'

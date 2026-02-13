@@ -1,30 +1,31 @@
 <odoo>
     <data>
-        <record  id="stock_picking_form_inherit" model="ir.ui.view">
-          <field name="name">stock_picking_form_inherit</field>
-          <field name="model">stock.picking</field>
-          <field name="inherit_id" ref="stock.view_picking_form"/>
-          <field name="arch" type="xml">
-              <!-- Agrega campos al formulario de Compra -->
-              <xpath expr="//field[@name='pick_up_date']" position="before">
-                  <field name="sla_date" attrs="{'invisible': ['|','|', ('name','=ilike','/OUT/'), ('name','=ilike','/IN/'), ('name','=ilike','/RET/') ]}"/>
-              </xpath>
-              <xpath expr="//field[@name='pick_up_date']" position="after">
-                  <field name="priority_date" attrs="{'invisible': ['|','|', ('name','=ilike','/OUT/'), ('name','=ilike','/IN/'), ('name','=ilike','/RET/') ]}"/>
-              </xpath>
-
-              </field>
+        <record id="stock_picking_form_inherit_sla" model="ir.ui.view">
+            <field name="name">stock.picking.form.inherit.sla</field>
+            <field name="model">stock.picking</field>
+            <field name="inherit_id" ref="stock.view_picking_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='scheduled_date']" position="after">
+                    
+                    <field name="sla_date" 
+                           invisible="not name or '/OUT/' in name or '/IN/' in name or '/RET/' in name"/>
+                           
+                    <field name="priority_date" 
+                           invisible="not name or '/OUT/' in name or '/IN/' in name or '/RET/' in name"/>
+                </xpath>
+            </field>
         </record>
 
-        <record  id="stock_picking_tree_inherit" model="ir.ui.view">
-          <field name="name">stock_picking_tree_inherit</field>
-          <field name="model">stock.picking</field>
-          <field name="inherit_id" ref="stock.vpicktree"/>
-          <field name="arch" type="xml">
-            <xpath expr="." position="inside">
-                <field name="sla_date"/>
+        <record id="stock_picking_list_inherit_sla" model="ir.ui.view">
+            <field name="name">stock.picking.list.inherit.sla</field>
+            <field name="model">stock.picking</field>
+            <field name="inherit_id" ref="stock.vpicktree"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='scheduled_date']" position="after">
+                    <field name="sla_date" optional="show"/>
+                    <field name="priority_date" optional="hide"/>
                 </xpath>
-         </field>
+            </field>
         </record>
     </data>
 </odoo>
