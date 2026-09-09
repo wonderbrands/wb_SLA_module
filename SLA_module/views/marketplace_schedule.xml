@@ -9,6 +9,8 @@
                     <sheet>
                         <group>
                             <field name="crm_team"/>
+                            <field name="sla_source"/>
+                            <field name="collection_cutoff_time" widget="float_time"/>
                             <field name="monday_to_friday_"/>
                             <field name="saturday"/>
                             <field name="sunday"/>
@@ -37,6 +39,8 @@
             <field name="arch" type="xml">
                 <list string="Horarios SLA date">
                     <field name="crm_team"/>
+                    <field name="sla_source"/>
+                    <field name="collection_cutoff_time" widget="float_time" optional="show"/>
                     <field name="monday_to_friday_"/>
                     <field name="saturday"/>
                     <field name="sunday"/>

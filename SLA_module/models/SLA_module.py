@@ -9,6 +9,14 @@ class MarketplaceSchedule(models.Model):
     # marketplace = fields.Many2one('res.partner', string='Marketplace') # Comentado en tu original
     crm_team = fields.Many2one('crm.team', string='Equipo de ventas', required=True)
     
+    sla_source = fields.Selection([
+        ('auto', 'Automático / Híbrido (Usar Yuju si existe, si no Calcular)'),
+        ('yuju', 'Yuju (Fecha límite de despacho del Marketplace)'),
+        ('calculated', 'Cálculo por Horario (SLA Schedule)')
+    ], string='Origen de SLA', default='auto', required=True)
+
+    collection_cutoff_time = fields.Float(string='Hora Límite de Recolección (ej. 17.0 = 5:00 PM)', default=17.0)
+
     monday_to_friday_ = fields.Integer(string='Lunes a Viernes (horas)')
     saturday = fields.Integer(string='Sábado (horas)')
     sunday = fields.Integer(string='Domingo (horas)')

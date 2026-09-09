@@ -6,12 +6,10 @@
             <field name="inherit_id" ref="stock.view_picking_form"/>
             <field name="arch" type="xml">
                 <xpath expr="//field[@name='scheduled_date']" position="after">
-                    
-                    <field name="sla_date" 
-                           invisible="not name or '/OUT/' in name or '/IN/' in name or '/RET/' in name"/>
-                           
-                    <field name="priority_date" 
-                           invisible="not name or '/OUT/' in name or '/IN/' in name or '/RET/' in name"/>
+                    <field name="sla_date"/>
+                    <field name="sla_priority_level"/>
+                    <field name="sla_priority_label"/>
+                    <field name="priority_date" optional="hide"/>
                 </xpath>
             </field>
         </record>
@@ -23,6 +21,8 @@
             <field name="arch" type="xml">
                 <xpath expr="//field[@name='scheduled_date']" position="after">
                     <field name="sla_date" optional="show"/>
+                    <field name="sla_priority_level" optional="show"/>
+                    <field name="sla_priority_label" optional="show"/>
                     <field name="priority_date" optional="hide"/>
                 </xpath>
             </field>
