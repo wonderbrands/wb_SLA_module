@@ -100,13 +100,57 @@ class Picking(models.Model):
     @api.model
     def _cron_update_sla_priorities(self):
         """ Cron job ejecutable cada hora para recalcular alertas de prioridad """
-        pickings = self.search([
+        # 1. Calcular sla_date para transferencias activas que aún no lo tienen
+        pickings_without_sla = self.search([
+            ('state', 'not in', ('done', 'cancel')),
+            ('sla_date', '=', False),
+            ('origin', '!=', False)
+        ])
+        for picking in pickings_without_sla:
+            try:
+                sale_order_name = picking.origin.split(',')[0].strip()
+                sale_order = self.env['sale.order'].search([('name', '=', sale_order_name)], limit=1)
+                if sale_order and sale_order.team_id:
+                    crm_team = sale_order.team_id.name
+                    schedule = self.env['marketplace.schedule'].search([
+                        ('crm_team', '=', sale_order.team_id.id)
+                    ], limit=1)
+                    if not schedule:
+                        schedule = self.env['marketplace.schedule'].search([
+                            ('crm_team.name', '=', crm_team)
+                        ], limit=1)
+
+                    sla_source = schedule.sla_source if schedule else 'auto'
+                    sla, pup, prio = False, None, False
+
+                    if sla_source in ('yuju', 'auto') and getattr(sale_order, 'yuju_due_date', False):
+                        parsed_yuju = parse_yuju_date(sale_order.yuju_due_date)
+                        if parsed_yuju:
+                            sla = parsed_yuju
+                            if schedule and schedule.auto_fill_dates:
+                                prio = parsed_yuju
+
+                    if not sla or sla_source == 'calculated':
+                        fulfillment = getattr(sale_order, 'fulfillment', False)
+                        date_order = sale_order.date_order
+                        sla, pup, prio = self._compute_sla_value_date(crm_team, date_order, fulfillment)
+
+                    if sla:
+                        picking.write({
+                            'sla_date': sla,
+                            'priority_date': prio,
+                        })
+            except Exception as e:
+                _logger.error(f"Error calculando SLA cron para {picking.name}: {e}")
+
+        # 2. Recalcular niveles y etiquetas para todas las transferencias activas con SLA
+        active_pickings = self.search([
             ('state', 'not in', ('done', 'cancel')),
             ('sla_date', '!=', False)
         ])
-        if pickings:
-            pickings._compute_sla_priority()
-            _logger.info(f"Cron SLA Priorities: Se actualizaron {len(pickings)} transferencias.")
+        if active_pickings:
+            active_pickings._compute_sla_priority()
+            _logger.info(f"Cron SLA Priorities: Se actualizaron {len(active_pickings)} transferencias.")
 
     def _compute_crm_team_info(self):
         """ Informativo para saber qué regla aplicó """
