@@ -12,6 +12,7 @@
                             <field name="sla_source"/>
                             <field name="collection_cutoff_time" widget="float_time"/>
                             <field name="days_after_creation"/>
+                            <field name="only_business_days"/>
                             <field name="monday_to_friday_" widget="float_time"/>
                             <field name="saturday" widget="float_time"/>
                             <field name="sunday" widget="float_time"/>
@@ -43,6 +44,7 @@
                     <field name="sla_source"/>
                     <field name="collection_cutoff_time" widget="float_time" optional="show"/>
                     <field name="days_after_creation" optional="show"/>
+                    <field name="only_business_days" optional="show"/>
                     <field name="monday_to_friday_" widget="float_time"/>
                     <field name="saturday" widget="float_time"/>
                     <field name="sunday" widget="float_time"/>

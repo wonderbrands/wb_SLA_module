@@ -214,10 +214,21 @@ class Picking(models.Model):
             cutoff_hours = int(cutoff_float)
             cutoff_minutes = int(round((cutoff_float - cutoff_hours) * 60))
             
-            target_local = local_date.replace(hour=cutoff_hours, minute=cutoff_minutes, second=0) + timedelta(days=schedule.days_after_creation)
+            if schedule.only_business_days:
+                curr_date = local_date
+                added = 0
+                while added < schedule.days_after_creation:
+                    curr_date += timedelta(days=1)
+                    if curr_date.weekday() not in (5, 6): # 5=Sábado, 6=Domingo
+                        added += 1
+                target_local = curr_date.replace(hour=cutoff_hours, minute=cutoff_minutes, second=0)
+            else:
+                target_local = local_date.replace(hour=cutoff_hours, minute=cutoff_minutes, second=0) + timedelta(days=schedule.days_after_creation)
+
             sla_final = target_local - timedelta(hours=UTC_LOCAL)
-            is_weekend = target_local.weekday() in (5, 6)
-            sla_final = self._get_business_day(sla_final, restrict_only_sunday=is_weekend)
+            if not schedule.only_business_days:
+                is_weekend = target_local.weekday() in (5, 6)
+                sla_final = self._get_business_day(sla_final, restrict_only_sunday=is_weekend)
         else:
             hours_to_add = 0
             is_weekend = False
@@ -241,7 +252,7 @@ class Picking(models.Model):
                 else:
                     sla_final = sla_final.replace(hour=12, minute=0, second=0)
                     sla_final = sla_final - timedelta(hours=UTC_LOCAL)
-                    restrict_sunday = True if is_weekend else False
+                    restrict_sunday = True if (is_weekend and not schedule.only_business_days) else False
                     sla_final = self._get_business_day(sla_final, restrict_sunday)
 
         if schedule.auto_fill_dates and sla_final:

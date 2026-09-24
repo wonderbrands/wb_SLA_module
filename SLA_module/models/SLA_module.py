@@ -25,6 +25,7 @@ class MarketplaceSchedule(models.Model):
 
     collection_cutoff_time = fields.Float(string='Hora Límite de Recolección (ej. 17.0 = 5:00 PM)', default=17.0)
     days_after_creation = fields.Integer(string='Días a partir de la creación de la venta', help='Número de días naturales a sumar desde la fecha de creación de la venta para calcular el SLA.', default=0)
+    only_business_days = fields.Boolean(string='Solo contar días hábiles', help='Si está activo, los sábados y domingos no cuentan para el cálculo de días del SLA.', default=False)
 
     monday_to_friday_ = fields.Float(string='Lunes a Viernes (horas)', default=24.0)
     saturday = fields.Float(string='Sábado (horas)', default=0.0)
