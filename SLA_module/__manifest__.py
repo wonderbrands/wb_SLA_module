@@ -6,7 +6,9 @@
     'description': 'This module allows you to manage the schedule for each marketplace.',
     'author': '"Sergio Guerrero"',
     'depends': ['base',
-                'stock'],
+                'stock',
+                'sale'],
+
     'data': [
         'security/ir.model.access.csv',
         'security/security_SLA.xml',

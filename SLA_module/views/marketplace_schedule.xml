@@ -8,12 +8,13 @@
                 <form string="Esquema de horarios para SLA-date">
                     <sheet>
                         <group>
-                            <field name="crm_team"/>
+                            <field name="marketplace"/>
                             <field name="sla_source"/>
                             <field name="collection_cutoff_time" widget="float_time"/>
-                            <field name="monday_to_friday_"/>
-                            <field name="saturday"/>
-                            <field name="sunday"/>
+                            <field name="days_after_creation"/>
+                            <field name="monday_to_friday_" widget="float_time"/>
+                            <field name="saturday" widget="float_time"/>
+                            <field name="sunday" widget="float_time"/>
                             
                             <field name="auxiliar_1" invisible="1"/>
                             <field name="auxiliar_2" invisible="1"/>
@@ -38,12 +39,13 @@
             <field name="model">marketplace.schedule</field>
             <field name="arch" type="xml">
                 <list string="Horarios SLA date">
-                    <field name="crm_team"/>
+                    <field name="marketplace"/>
                     <field name="sla_source"/>
                     <field name="collection_cutoff_time" widget="float_time" optional="show"/>
-                    <field name="monday_to_friday_"/>
-                    <field name="saturday"/>
-                    <field name="sunday"/>
+                    <field name="days_after_creation" optional="show"/>
+                    <field name="monday_to_friday_" widget="float_time"/>
+                    <field name="saturday" widget="float_time"/>
+                    <field name="sunday" widget="float_time"/>
                     <field name="auxiliar_1" column_invisible="1"/>
                     <field name="auxiliar_2" column_invisible="1"/>
                     
