@@ -210,10 +210,6 @@ class Picking(models.Model):
                     next_day = local_date.replace(hour=0, minute=0, second=0) + timedelta(days=1)
                     sla_final = next_day + timedelta(hours=11, minutes=59, seconds=59) - timedelta(hours=UTC_LOCAL)
         elif schedule.days_after_creation and schedule.days_after_creation > 0:
-            cutoff_float = schedule.collection_cutoff_time if schedule.collection_cutoff_time else 17.0
-            cutoff_hours = int(cutoff_float)
-            cutoff_minutes = int(round((cutoff_float - cutoff_hours) * 60))
-            
             if schedule.only_business_days:
                 curr_date = local_date
                 added = 0
@@ -221,9 +217,9 @@ class Picking(models.Model):
                     curr_date += timedelta(days=1)
                     if curr_date.weekday() not in (5, 6): # 5=Sábado, 6=Domingo
                         added += 1
-                target_local = curr_date.replace(hour=cutoff_hours, minute=cutoff_minutes, second=0)
+                target_local = curr_date.replace(hour=23, minute=59, second=59)
             else:
-                target_local = local_date.replace(hour=cutoff_hours, minute=cutoff_minutes, second=0) + timedelta(days=schedule.days_after_creation)
+                target_local = local_date.replace(hour=23, minute=59, second=59) + timedelta(days=schedule.days_after_creation)
 
             sla_final = target_local - timedelta(hours=UTC_LOCAL)
             if not schedule.only_business_days:
@@ -250,7 +246,7 @@ class Picking(models.Model):
                     sla_final = sla_final - timedelta(hours=UTC_LOCAL)
                     sla_final = self._get_business_day(sla_final, False)
                 else:
-                    sla_final = sla_final.replace(hour=12, minute=0, second=0)
+                    sla_final = sla_final.replace(hour=23, minute=59, second=59)
                     sla_final = sla_final - timedelta(hours=UTC_LOCAL)
                     restrict_sunday = True if (is_weekend and not schedule.only_business_days) else False
                     sla_final = self._get_business_day(sla_final, restrict_sunday)
