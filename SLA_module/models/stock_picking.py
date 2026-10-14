@@ -45,9 +45,24 @@ class Picking(models.Model):
     sla_priority_label = fields.Char(string="Aviso Recolección SLA", compute="_compute_sla_priority", store=True)
     marketplace_info = fields.Text(string="Marketplace Information", compute="_compute_marketplace_info")
 
-    @api.depends('sla_date', 'state')
+    # Campos para Reasignación Manual de SLA
+    sla_manual_override = fields.Boolean(string="SLA Reasignado Manualmente", default=False, copy=False)
+    sla_override_reason = fields.Selection([
+        ('no_space', 'Falta de espacio en transporte / unidad'),
+        ('carrier_cutoff', 'Corte de paquetería / retraso de recolección'),
+        ('platform_rescheduled', 'Reprogramado por marketplace / plataforma'),
+        ('customer_request', 'Petición del cliente'),
+        ('other', 'Otro motivo'),
+    ], string="Motivo Reasignación SLA", copy=False)
+    sla_override_note = fields.Text(string="Nota / Justificación Reasignación", copy=False)
+    sla_override_date = fields.Datetime(string="Fecha de Reasignación", copy=False)
+    sla_override_user_id = fields.Many2one('res.users', string="Reasignado por", copy=False)
+    sla_original_date = fields.Datetime(string="Fecha SLA Original", copy=False)
+
+    @api.depends('sla_date', 'state', 'sla_manual_override')
     def _compute_sla_priority(self):
         now_utc = fields.Datetime.now()
+        now_local = now_utc + timedelta(hours=UTC_LOCAL)
         for picking in self:
             if picking.state in ('done', 'cancel') or not picking.sla_date:
                 picking.sla_priority_level = 'normal'
@@ -55,7 +70,7 @@ class Picking(models.Model):
                 continue
 
             effective_sla = picking.sla_date
-            so = picking.sale_id
+            so = getattr(picking, 'sale_id', False)
             if not effective_sla and so and getattr(so, 'yuju_due_date', False):
                 parsed = parse_yuju_date(so.yuju_due_date)
                 if parsed:
@@ -66,14 +81,32 @@ class Picking(models.Model):
                 picking.sla_priority_label = ''
                 continue
 
-            if effective_sla < now_utc:
+            # Determinar si el SLA está en UTC o local
+            channel = (getattr(so, 'channel', False) or '') if so else ''
+            is_utc = False
+            if channel:
+                ch_low = channel.lower()
+                if 'amazon' in ch_low or 'walmart' in ch_low:
+                    is_utc = True
+                try:
+                    cfg = self.env['wmds.mysql.config'].sudo().search([
+                        ('marketplace', 'ilike', channel.strip())
+                    ], limit=1)
+                    if cfg and cfg.sla_timezone:
+                        is_utc = (cfg.sla_timezone == 'utc')
+                except Exception:
+                    pass
+
+            target_now = now_utc if is_utc else now_local
+
+            if effective_sla < target_now:
                 picking.sla_priority_level = 'overdue'
                 picking.sla_priority_label = 'SLA Vencido'
-            elif effective_sla <= now_utc + timedelta(hours=1):
+            elif effective_sla <= target_now + timedelta(hours=1):
                 picking.sla_priority_level = 'critical_1h'
                 picking.sla_priority_label = 'Está a punto de llegar la recolecta (< 1h)'
             else:
-                diff_hours = (effective_sla - now_utc).total_seconds() / 3600.0
+                diff_hours = (effective_sla - target_now).total_seconds() / 3600.0
                 if diff_hours <= 2.0:
                     picking.sla_priority_level = 'urgent_2h'
                     picking.sla_priority_label = 'Quedan 2 horas para la recolecta'
@@ -310,3 +343,20 @@ class Picking(models.Model):
                     _logger.error(f"Error calculando SLA para picking {picking.name}: {e}")
 
         return res
+
+
+class SaleOrder(models.Model):
+    _inherit = 'sale.order'
+
+    sla_manual_override = fields.Boolean(string="SLA Reasignado Manualmente", default=False, copy=False)
+    sla_override_reason = fields.Selection([
+        ('no_space', 'Falta de espacio en transporte / unidad'),
+        ('carrier_cutoff', 'Corte de paquetería / retraso de recolección'),
+        ('platform_rescheduled', 'Reprogramado por marketplace / plataforma'),
+        ('customer_request', 'Petición del cliente'),
+        ('other', 'Otro motivo'),
+    ], string="Motivo Reasignación SLA", copy=False)
+    sla_override_note = fields.Text(string="Nota / Justificación Reasignación", copy=False)
+    sla_override_date = fields.Datetime(string="Fecha de Reasignación", copy=False)
+    sla_override_user_id = fields.Many2one('res.users', string="Reasignado por", copy=False)
+    sla_original_date = fields.Datetime(string="Fecha SLA Original", copy=False)

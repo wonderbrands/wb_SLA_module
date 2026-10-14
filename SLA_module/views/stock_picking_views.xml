@@ -9,6 +9,9 @@
                     <field name="sla_date"/>
                     <field name="sla_priority_level"/>
                     <field name="sla_priority_label"/>
+                    <field name="sla_manual_override" widget="boolean_toggle"/>
+                    <field name="sla_override_reason" invisible="not sla_manual_override"/>
+                    <field name="sla_override_note" invisible="not sla_manual_override"/>
                     <field name="priority_date" optional="hide"/>
                 </xpath>
             </field>
@@ -23,6 +26,8 @@
                     <field name="sla_date" optional="show"/>
                     <field name="sla_priority_level" optional="show"/>
                     <field name="sla_priority_label" optional="show"/>
+                    <field name="sla_manual_override" optional="show"/>
+                    <field name="sla_override_reason" optional="hide"/>
                     <field name="priority_date" optional="hide"/>
                 </xpath>
             </field>

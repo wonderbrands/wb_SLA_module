@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_sla_override_wizard_form" model="ir.ui.view">
+        <field name="name">sla.override.wizard.form</field>
+        <field name="model">sla.override.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Reasignación / Empuje Manual de SLA">
+                <sheet>
+                    <div class="alert alert-info" role="alert">
+                        Utilice este asistente para posponer o reasignar la fecha límite de SLA (por ejemplo, ante falta de espacio en la unidad de transporte del carrier).
+                    </div>
+                    <group>
+                        <group>
+                            <field name="new_sla_date" widget="datetime"/>
+                            <field name="reason" widget="radio"/>
+                        </group>
+                        <group>
+                            <field name="note" placeholder="Detalle el motivo o número de incidencia si aplica..."/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Albaranes Afectados" invisible="not picking_ids">
+                            <field name="picking_ids" readonly="1">
+                                <list>
+                                    <field name="name"/>
+                                    <field name="origin"/>
+                                    <field name="sla_date" string="SLA Actual"/>
+                                    <field name="sla_priority_level"/>
+                                    <field name="state"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Órdenes de Venta Afectadas" invisible="not sale_ids">
+                            <field name="sale_ids" readonly="1">
+                                <list>
+                                    <field name="name"/>
+                                    <field name="date_order"/>
+                                    <field name="partner_id"/>
+                                    <field name="state"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+                <footer>
+                    <button string="Aplicar Reasignación" name="action_apply_override" type="object" class="btn-primary"/>
+                    <button string="Cancelar" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- Action para abrir el Wizard -->
+    <record id="action_sla_override_wizard" model="ir.actions.act_window">
+        <field name="name">Reasignar / Empujar SLA</field>
+        <field name="res_model">sla.override.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+        <field name="binding_model_id" ref="stock.model_stock_picking"/>
+        <field name="binding_view_types">list,form</field>
+    </record>
+
+    <!-- Binding también en sale.order -->
+    <record id="action_sla_override_wizard_sale" model="ir.actions.act_window">
+        <field name="name">Reasignar / Empujar SLA</field>
+        <field name="res_model">sla.override.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+        <field name="binding_model_id" ref="sale.model_sale_order"/>
+        <field name="binding_view_types">list,form</field>
+    </record>
+</odoo>
