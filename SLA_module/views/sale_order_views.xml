@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Extensión de Formulario de Órdenes de Venta -->
+    <record id="view_order_form_sla_inherit" model="ir.ui.view">
+        <field name="name">sale.order.form.sla.inherit</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="arch" type="xml">
+            <!-- Añadir botón en header para empujar SLA -->
+            <xpath expr="//header" position="inside">
+                <button name="action_open_sla_override_wizard"
+                        string="Empujar / Reasignar SLA"
+                        type="object"
+                        class="btn-secondary"
+                        groups="base.group_user"/>
+            </xpath>
+
+            <!-- Añadir página SLA en el notebook -->
+            <xpath expr="//notebook" position="inside">
+                <page string="SLA" name="page_sla">
+                    <group>
+                        <group string="Métricas de Compromiso de Despacho (SLA)">
+                            <field name="sla_date" widget="datetime" readonly="1"/>
+                            <field name="priority_date" widget="datetime" readonly="1"/>
+                            <field name="sla_priority_level" readonly="1" widget="badge"
+                                   decoration-danger="sla_priority_level == 'overdue'"
+                                   decoration-warning="sla_priority_level in ('critical_1h', 'urgent_2h')"
+                                   decoration-info="sla_priority_level == 'warning_6h'"
+                                   decoration-success="sla_priority_level in ('notice_24h', 'normal')"/>
+                            <field name="sla_priority_label" readonly="1"/>
+                            <field name="sla_grace_applied" readonly="1"/>
+                        </group>
+                        <group string="Auditoría y Ajustes Manuales">
+                            <field name="sla_manual_override" readonly="1"/>
+                            <field name="sla_original_date" readonly="1" invisible="not sla_original_date"/>
+                            <field name="sla_override_reason" readonly="1" invisible="not sla_manual_override"/>
+                            <field name="sla_override_date" readonly="1" invisible="not sla_manual_override"/>
+                            <field name="sla_override_user_id" readonly="1" invisible="not sla_manual_override"/>
+                            <field name="sla_override_note" readonly="1" invisible="not sla_manual_override"/>
+                        </group>
+                    </group>
+
+                    <separator string="Historial de Modificaciones / Empujes de SLA"/>
+                    <field name="sla_history_ids" readonly="1">
+                        <list default_order="date desc">
+                            <field name="date" string="Fecha del Cambio"/>
+                            <field name="user_id" string="Usuario"/>
+                            <field name="old_sla_date" string="SLA Anterior"/>
+                            <field name="new_sla_date" string="Nuevo SLA"/>
+                            <field name="reason" string="Motivo"/>
+                            <field name="note" string="Observaciones / Justificación"/>
+                        </list>
+                    </field>
+                </page>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Extensión de Búsqueda / Filtros de Órdenes de Venta -->
+    <record id="view_sales_order_filter_sla_inherit" model="ir.ui.view">
+        <field name="name">sale.order.search.sla.inherit</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_sales_order_filter"/>
+        <field name="arch" type="xml">
+            <xpath expr="//filter[@name='my_sale_orders_filter']" position="after">
+                <separator/>
+                <filter string="Ventas No Confirmadas (Sin Albarán)" name="filter_unconfirmed_sales"
+                        domain="[('state', 'in', ('draft', 'sent'))]"/>
+                <filter string="Con SLA Asignado" name="filter_with_sla"
+                        domain="[('sla_date', '!=', False)]"/>
+                <filter string="Sin SLA Asignado" name="filter_without_sla"
+                        domain="[('sla_date', '=', False)]"/>
+                <filter string="SLA Vencido" name="filter_sla_overdue"
+                        domain="[('sla_priority_level', '=', 'overdue')]"/>
+                <filter string="SLA Crítico (&lt; 1h)" name="filter_sla_critical"
+                        domain="[('sla_priority_level', '=', 'critical_1h')]"/>
+                <separator/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

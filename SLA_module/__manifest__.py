@@ -15,6 +15,7 @@
         'security/security_SLA.xml',
         'data/ir_cron_data.xml',
         'wizard/sla_override_wizard_views.xml',
+        'views/sale_order_views.xml',
         'views/stock_picking_views.xml',
         'views/marketplace_schedule.xml',
     ],

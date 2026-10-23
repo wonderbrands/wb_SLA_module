@@ -122,13 +122,24 @@ class Picking(models.Model):
 
     @api.model
     def _cron_update_sla_priorities(self):
-        """ Cron job ejecutable cada hora para recalcular alertas de prioridad """
+        """ Cron job ejecutable periódicamente para recalcular y sincronizar SLA en órdenes y albaranes """
+        # 1. Asegurar cálculo en ventas activas sin SLA
+        orders_without_sla = self.env['sale.order'].search([
+            ('state', '!=', 'cancel'),
+            ('sla_date', '=', False),
+        ], limit=500)
+        for order in orders_without_sla:
+            try:
+                order.calculate_and_assign_sla()
+            except Exception as e:
+                _logger.error(f"Error calculando SLA cron para venta {order.name}: {e}")
+
+        # 2. Asignar SLA a albaranes sin SLA
         pickings_without_sla = self.search([
             ('state', 'not in', ('done', 'cancel')),
-            ('sale_id', '!=', False),
             ('sla_date', '=', False),
             ('origin', '!=', False)
-        ])
+        ], limit=500)
         for picking in pickings_without_sla:
             try:
                 sale_order = picking.sale_id
@@ -137,41 +148,15 @@ class Picking(models.Model):
                     sale_order = self.env['sale.order'].search([('name', '=', sale_order_name)], limit=1)
 
                 if sale_order:
-                    channel = sale_order.channel or ''
-                    schedule = False
-                    if channel:
-                        schedule = self.env['marketplace.schedule'].search([
-                            ('marketplace', '=', channel)
-                        ], limit=1)
-                        if not schedule:
-                            schedules = self.env['marketplace.schedule'].search([])
-                            for sch in schedules:
-                                if sch.marketplace and sch.marketplace.lower() in channel.lower():
-                                    schedule = sch
-                                    break
-
-                    sla_source = schedule.sla_source if schedule else 'auto'
-                    sla, pup, prio = False, None, False
-
-                    if sla_source in ('yuju', 'auto') and getattr(sale_order, 'yuju_due_date', False):
-                        parsed_yuju = parse_yuju_date(sale_order.yuju_due_date)
-                        if parsed_yuju:
-                            sla = parsed_yuju
-                            if schedule and schedule.auto_fill_dates:
-                                prio = parsed_yuju
-
-                    if not sla or sla_source == 'calculated':
-                        fulfillment = getattr(sale_order, 'fulfillment', False)
-                        date_order = sale_order.date_order
-                        sla, pup, prio = self._compute_sla_value_date(channel, date_order, fulfillment)
-
-                    if sla:
+                    if not sale_order.sla_date:
+                        sale_order.calculate_and_assign_sla()
+                    if sale_order.sla_date:
                         picking.write({
-                            'sla_date': sla,
-                            'priority_date': prio,
+                            'sla_date': sale_order.sla_date,
+                            'priority_date': sale_order.priority_date or sale_order.sla_date,
                         })
             except Exception as e:
-                _logger.error(f"Error calculando SLA cron para {picking.name}: {e}")
+                _logger.error(f"Error sincronizando SLA cron para {picking.name}: {e}")
 
         active_pickings = self.search([
             ('state', 'not in', ('done', 'cancel')),
@@ -290,7 +275,7 @@ class Picking(models.Model):
         return sla_final, None, None
 
     def action_confirm(self):
-        """ Sobreescritura para calcular SLA al confirmar """
+        """ Sobreescritura para calcular/heredar SLA al confirmar """
         res = super(Picking, self).action_confirm()
 
         for picking in self:
@@ -304,59 +289,35 @@ class Picking(models.Model):
             
             if sale_order:
                 try:
-                    channel = sale_order.channel or ''
-                    schedule = False
-                    if channel:
-                        schedule = self.env['marketplace.schedule'].search([
-                            ('marketplace', '=', channel)
-                        ], limit=1)
-                        if not schedule:
-                            schedules = self.env['marketplace.schedule'].search([])
-                            for sch in schedules:
-                                if sch.marketplace and sch.marketplace.lower() in channel.lower():
-                                    schedule = sch
-                                    break
+                    if not sale_order.sla_date:
+                        sale_order.calculate_and_assign_sla()
 
-                    sla_source = schedule.sla_source if schedule else 'auto'
-                    sla, pup, prio = False, None, False
-
-                    if sla_source in ('yuju', 'auto') and getattr(sale_order, 'yuju_due_date', False):
-                        parsed_yuju = parse_yuju_date(sale_order.yuju_due_date)
-                        if parsed_yuju:
-                            sla = parsed_yuju
-                            if schedule and schedule.auto_fill_dates:
-                                prio = parsed_yuju
-
-                    if not sla or sla_source == 'calculated':
-                        fulfillment = getattr(sale_order, 'fulfillment', False)
-                        date_order = sale_order.date_order
-                        sla, pup, prio = self._compute_sla_value_date(channel, date_order, fulfillment)
-
+                    if sale_order.sla_date:
+                        vals = {
+                            'sla_date': sale_order.sla_date,
+                            'priority_date': sale_order.priority_date or sale_order.sla_date,
+                            'sla_manual_override': sale_order.sla_manual_override,
+                            'sla_override_reason': sale_order.sla_override_reason,
+                            'sla_override_note': sale_order.sla_override_note,
+                            'sla_override_date': sale_order.sla_override_date,
+                            'sla_override_user_id': sale_order.sla_override_user_id.id if sale_order.sla_override_user_id else False,
+                            'sla_original_date': sale_order.sla_original_date,
+                        }
+                        picking.write(vals)
+                        _logger.info(f"SLA heredado de orden {sale_order.name} para picking {picking.name}: {sale_order.sla_date}")
+                except Exception as e:
+                    _logger.error(f"Error heredando SLA para picking {picking.name}: {e}")
+            else:
+                try:
+                    # Albarán sin venta directa
+                    date_order = picking.date or fields.Datetime.now()
+                    sla, pup, prio = self._compute_sla_value_date(False, date_order, False)
                     if sla:
                         picking.write({
                             'sla_date': sla,
                             'priority_date': prio,
                         })
-                        _logger.info(f"SLA asignado para {picking.name}: {sla} (Origen: {sla_source})")
-                    
                 except Exception as e:
-                    _logger.error(f"Error calculando SLA para picking {picking.name}: {e}")
+                    _logger.error(f"Error calculando SLA para picking sin venta {picking.name}: {e}")
 
         return res
-
-
-class SaleOrder(models.Model):
-    _inherit = 'sale.order'
-
-    sla_manual_override = fields.Boolean(string="SLA Reasignado Manualmente", default=False, copy=False)
-    sla_override_reason = fields.Selection([
-        ('no_space', 'Falta de espacio en transporte / unidad'),
-        ('carrier_cutoff', 'Corte de paquetería / retraso de recolección'),
-        ('platform_rescheduled', 'Reprogramado por marketplace / plataforma'),
-        ('customer_request', 'Petición del cliente'),
-        ('other', 'Otro motivo'),
-    ], string="Motivo Reasignación SLA", copy=False)
-    sla_override_note = fields.Text(string="Nota / Justificación Reasignación", copy=False)
-    sla_override_date = fields.Datetime(string="Fecha de Reasignación", copy=False)
-    sla_override_user_id = fields.Many2one('res.users', string="Reasignado por", copy=False)
-    sla_original_date = fields.Datetime(string="Fecha SLA Original", copy=False)

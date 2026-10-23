@@ -12,6 +12,7 @@
                     <group>
                         <group>
                             <field name="new_sla_date" widget="datetime"/>
+                            <field name="marketplace"/>
                             <field name="reason" widget="radio"/>
                         </group>
                         <group>
