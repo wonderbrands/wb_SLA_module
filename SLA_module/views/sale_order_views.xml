@@ -28,7 +28,6 @@
                                    decoration-info="sla_priority_level == 'warning_6h'"
                                    decoration-success="sla_priority_level in ('notice_24h', 'normal')"/>
                             <field name="sla_priority_label" readonly="1"/>
-                            <field name="sla_grace_applied" readonly="1"/>
                         </group>
                         <group string="Auditoría y Ajustes Manuales">
                             <field name="sla_manual_override" readonly="1"/>

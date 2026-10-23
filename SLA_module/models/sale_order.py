@@ -80,12 +80,6 @@ class SaleOrder(models.Model):
     sla_override_user_id = fields.Many2one('res.users', string="Reasignado por", copy=False)
     sla_original_date = fields.Datetime(string="Fecha SLA Original", copy=False)
 
-    sla_grace_applied = fields.Boolean(
-        string="SLA de Gracia Aplicado",
-        default=False,
-        copy=False,
-        help="Indica si la fecha de Yuju llegó vencida y se calculó un SLA de gracia a partir de la entrada a Odoo."
-    )
     sla_history_ids = fields.One2many(
         'sale.order.sla.history',
         'sale_id',
@@ -259,31 +253,14 @@ class SaleOrder(models.Model):
             sla_source = schedule.sla_source if schedule else 'auto'
             sla = False
             prio = False
-            grace = False
 
-            # Evaluar yuju_due_date
+            # Evaluar yuju_due_date directamente (respetando fecha del marketplace tal cual)
             if sla_source in ('yuju', 'auto') and getattr(order, 'yuju_due_date', False):
                 parsed_yuju = parse_yuju_date(order.yuju_due_date)
                 if parsed_yuju:
-                    # Comparar con fecha de ingreso a Odoo
-                    entry_dt = order.create_date or order.date_order or fields.Datetime.now()
-                    if parsed_yuju <= entry_dt:
-                        # yuju_due_date ya venía vencida al ingresar a Odoo
-                        # Aplicar SLA de gracia calculando según regla de schedule desde entrada
-                        calc_sla, _, calc_prio = order._compute_sla_value_date(
-                            channel, entry_dt, getattr(order, 'fulfillment', False)
-                        )
-                        if calc_sla:
-                            sla = calc_sla
-                            prio = calc_prio
-                            grace = True
-                        else:
-                            sla = parsed_yuju
-                            grace = False
-                    else:
-                        sla = parsed_yuju
-                        if schedule and schedule.auto_fill_dates:
-                            prio = parsed_yuju
+                    sla = parsed_yuju
+                    if schedule and schedule.auto_fill_dates:
+                        prio = parsed_yuju
 
             if not sla or sla_source == 'calculated':
                 base_dt = order.date_order or order.create_date or fields.Datetime.now()
@@ -298,7 +275,6 @@ class SaleOrder(models.Model):
                 vals = {
                     'sla_date': sla,
                     'priority_date': prio or sla,
-                    'sla_grace_applied': grace,
                 }
                 order.write(vals)
 
