@@ -7,6 +7,33 @@ _logger = logging.getLogger(__name__)
 
 UTC_LOCAL = -6
 
+CHANNEL_NORMALIZATION_MAP = {
+    'mercado libre méxico': 'Mercado Libre Mexico',
+    'mercado libre mexico': 'Mercado Libre Mexico',
+    'mercado libre': 'Mercado Libre Mexico',
+    'mercado libre mexico.': 'Mercado Libre Mexico',
+    'merado libre': 'Mercado Libre Mexico',
+    'mercado lubre': 'Mercado Libre Mexico',
+    'tik tok shop': 'TikTok Shop',
+    'tiktok': 'TikTok Shop',
+    'tiktok shop': 'TikTok Shop',
+    'liquidaciones': 'Liquidacion',
+    'liquidacion': 'Liquidacion',
+    'venta empleado': 'Ventas Empleado',
+    'venta emplado': 'Ventas Empleado',
+    'ventas empleado': 'Ventas Empleado',
+    'walmart 1p': 'Walmart',
+    'nerna': 'Merma',
+}
+
+
+def normalize_channel(channel_str):
+    if not channel_str or not isinstance(channel_str, str):
+        return channel_str
+    clean = channel_str.strip()
+    return CHANNEL_NORMALIZATION_MAP.get(clean.lower(), clean)
+
+
 
 def parse_yuju_date(dt_str):
     if not dt_str:
@@ -289,6 +316,9 @@ class SaleOrder(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
+        for vals in vals_list:
+            if vals.get('channel'):
+                vals['channel'] = normalize_channel(vals['channel'])
         orders = super(SaleOrder, self).create(vals_list)
         for order in orders:
             try:
@@ -298,6 +328,8 @@ class SaleOrder(models.Model):
         return orders
 
     def write(self, vals):
+        if vals.get('channel'):
+            vals['channel'] = normalize_channel(vals['channel'])
         res = super(SaleOrder, self).write(vals)
         trigger_fields = {'channel', 'date_order', 'fulfillment', 'yuju_due_date'}
         if trigger_fields.intersection(vals.keys()):
