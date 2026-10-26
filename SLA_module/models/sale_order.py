@@ -72,6 +72,7 @@ class SaleOrderSlaHistory(models.Model):
         ('carrier_cutoff', 'Corte de paquetería / retraso de recolección'),
         ('platform_rescheduled', 'Reprogramado por marketplace / plataforma'),
         ('customer_request', 'Petición del cliente'),
+        ('prior_to_entry', 'SLA recibido previo a fecha de ingreso'),
         ('other', 'Otro motivo'),
     ], string="Motivo", readonly=True)
     note = fields.Text(string="Nota / Justificación", readonly=True)
@@ -100,6 +101,7 @@ class SaleOrder(models.Model):
         ('carrier_cutoff', 'Corte de paquetería / retraso de recolección'),
         ('platform_rescheduled', 'Reprogramado por marketplace / plataforma'),
         ('customer_request', 'Petición del cliente'),
+        ('prior_to_entry', 'SLA recibido previo a fecha de ingreso'),
         ('other', 'Otro motivo'),
     ], string="Motivo Reasignación SLA", copy=False)
     sla_override_note = fields.Text(string="Nota / Justificación Reasignación", copy=False)
@@ -299,6 +301,117 @@ class SaleOrder(models.Model):
                     prio = calc_prio
 
             if sla:
+                # -------------------------------------------------------------
+                # Verificación de SLA previo a fecha de ingreso
+                # (ej. pedidos de Mercado Libre retenidos por antifraude o ingresados tarde)
+                # -------------------------------------------------------------
+                entry_dt = order.create_date or order.date_order or fields.Datetime.now()
+                if order.create_date and order.date_order:
+                    entry_dt = max(order.create_date, order.date_order)
+
+                is_utc = False
+                if channel:
+                    ch_low = channel.lower()
+                    if 'amazon' in ch_low or 'walmart' in ch_low:
+                        is_utc = True
+                    try:
+                        cfg = self.env['wmds.mysql.config'].sudo().search([
+                            ('marketplace', 'ilike', channel.strip())
+                        ], limit=1)
+                        if cfg and cfg.sla_timezone:
+                            is_utc = (cfg.sla_timezone == 'utc')
+                    except Exception:
+                        pass
+
+                entry_compare = entry_dt if is_utc else (entry_dt + timedelta(hours=UTC_LOCAL))
+
+                if sla < entry_compare:
+                    old_sla = sla
+                    calc_sla, _, calc_prio = order._compute_sla_value_date(
+                        channel, entry_dt, getattr(order, 'fulfillment', False)
+                    )
+
+                    new_sla = False
+                    if calc_sla:
+                        cand_sla = calc_sla if is_utc else (calc_sla + timedelta(hours=UTC_LOCAL))
+                        if cand_sla > entry_compare:
+                            new_sla = cand_sla
+
+                    if not new_sla:
+                        # Fallback a siguiente ventana de recolección
+                        limit_hour = datetime.strptime('12:00:00', '%H:%M:%S').time()
+                        if entry_compare.time() <= limit_hour:
+                            target_local = entry_compare.replace(hour=23, minute=59, second=59)
+                        else:
+                            target_local = (entry_compare + timedelta(days=1)).replace(hour=11, minute=59, second=59)
+                        target_local = order._get_business_day(target_local, restrict_only_sunday=False)
+                        new_sla = target_local if not is_utc else (target_local - timedelta(hours=UTC_LOCAL))
+
+                    now_dt = fields.Datetime.now()
+                    now_user_id = self.env.user.id if self.env.user else 1
+                    reason = 'prior_to_entry'
+                    entry_str = entry_compare.strftime('%Y-%m-%d %H:%M:%S')
+                    old_sla_str = old_sla.strftime('%Y-%m-%d %H:%M:%S') if hasattr(old_sla, 'strftime') else str(old_sla)
+                    new_sla_str = new_sla.strftime('%Y-%m-%d %H:%M:%S') if hasattr(new_sla, 'strftime') else str(new_sla)
+
+                    note = (
+                        f"Empuje automático: SLA original ({old_sla_str}) era previo a la fecha de ingreso a Odoo "
+                        f"({entry_str}). Reasignado automáticamente a {new_sla_str}."
+                    )
+
+                    vals = {
+                        'sla_date': new_sla,
+                        'priority_date': new_sla,
+                        'sla_original_date': old_sla,
+                        'sla_manual_override': True,
+                        'sla_override_reason': reason,
+                        'sla_override_note': note,
+                        'sla_override_date': now_dt,
+                        'sla_override_user_id': now_user_id,
+                    }
+                    order.write(vals)
+
+                    # Registrar en historial de modificaciones SLA
+                    self.env['sale.order.sla.history'].create({
+                        'sale_id': order.id,
+                        'user_id': now_user_id,
+                        'date': now_dt,
+                        'old_sla_date': old_sla,
+                        'new_sla_date': new_sla,
+                        'reason': reason,
+                        'note': note,
+                    })
+
+                    # Registrar nota en chatter
+                    msg = (
+                        f"<b>SLA Empujado Automáticamente al Ingreso</b><br/>"
+                        f"<b>Fecha de Ingreso Odoo:</b> {entry_str}<br/>"
+                        f"<b>SLA Original Marketplace:</b> {old_sla_str}<br/>"
+                        f"<b>Nueva Fecha SLA Asignada:</b> {new_sla_str}<br/>"
+                        f"<b>Motivo:</b> SLA recibido previo a fecha de ingreso al almacén.<br/>"
+                    )
+                    try:
+                        order.message_post(body=msg)
+                    except Exception:
+                        pass
+
+                    # Sincronizar transferencias abiertas
+                    open_pickings = order.picking_ids.filtered(lambda p: p.state not in ('done', 'cancel'))
+                    if open_pickings:
+                        open_pickings.write({
+                            'sla_date': new_sla,
+                            'priority_date': new_sla,
+                            'sla_original_date': old_sla,
+                            'sla_manual_override': True,
+                            'sla_override_reason': reason,
+                            'sla_override_note': note,
+                            'sla_override_date': now_dt,
+                            'sla_override_user_id': now_user_id,
+                        })
+                        open_pickings._compute_sla_priority()
+
+                    continue
+
                 vals = {
                     'sla_date': sla,
                     'priority_date': prio or sla,

@@ -16,6 +16,7 @@ class SlaOverrideWizard(models.TransientModel):
         ('carrier_cutoff', 'Corte de paquetería / retraso de recolección'),
         ('platform_rescheduled', 'Reprogramado por marketplace / plataforma'),
         ('customer_request', 'Petición del cliente'),
+        ('prior_to_entry', 'SLA recibido previo a fecha de ingreso'),
         ('other', 'Otro motivo'),
     ], string="Motivo de Reasignación", required=True, default='no_space')
     note = fields.Text(string="Notas / Observaciones Adicionales")
