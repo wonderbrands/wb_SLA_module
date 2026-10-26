@@ -179,41 +179,51 @@ class SaleOrder(models.Model):
         return date_val
 
     def _compute_sla_value_date(self, channel_name, base_date, fulfillment):
-        """ Calcula SLA según marketplace.schedule """
-        if not base_date:
+        """ Calcula SLA según marketplace.schedule específica """
+        if not base_date or not channel_name:
             return False, None, False
 
-        schedule = False
-        if channel_name:
-            schedule = self.env['marketplace.schedule'].search([
-                ('marketplace', '=', channel_name)
-            ], limit=1)
-            if not schedule:
-                schedules = self.env['marketplace.schedule'].search([])
-                for sch in schedules:
-                    if sch.marketplace and sch.marketplace.lower() in channel_name.lower():
-                        schedule = sch
-                        break
+        clean_channel = normalize_channel(channel_name)
+        # Búsqueda estricta por nombre de marketplace específico
+        schedule = self.env['marketplace.schedule'].search([
+            ('marketplace', '=ilike', clean_channel.strip())
+        ], limit=1)
 
-        if not schedule:
+        # SOLO debe calcularse si existe una regla por marketplace específica y su origen lo permite
+        if not schedule or schedule.sla_source == 'yuju':
             return False, None, False
 
         local_date = base_date + timedelta(hours=UTC_LOCAL)
-        day_of_week = local_date.strftime('%A').lower()
-        limit_hour_time = datetime.strptime('12:00:00', '%H:%M:%S').time()
-
-        m_clean = (channel_name or "").lower().replace(" ", "")
+        m_clean = (clean_channel or "").lower().replace(" ", "")
         fulfillment_clean = str(fulfillment).lower() if fulfillment else ""
         sla_final = False
 
+        # Determinar si el marketplace se almacena en UTC o Local según wmds.mysql.config
+        is_utc = False
+        if clean_channel:
+            ch_low = clean_channel.lower()
+            if 'amazon' in ch_low or 'walmart' in ch_low:
+                is_utc = True
+            try:
+                cfg = self.env['wmds.mysql.config'].sudo().search([
+                    ('marketplace', 'ilike', clean_channel.strip())
+                ], limit=1)
+                if cfg and cfg.sla_timezone:
+                    is_utc = (cfg.sla_timezone == 'utc')
+            except Exception:
+                pass
+
         if ('mercadolibre' in m_clean or 'mercado' in m_clean) and (fulfillment_clean == 'fbf'):
             flex_mins = schedule.flex or 0
+            limit_hour_time = datetime.strptime('12:00:00', '%H:%M:%S').time()
             if flex_mins > 0:
                 if local_date.time() <= limit_hour_time:
-                    sla_final = base_date + timedelta(minutes=flex_mins)
+                    sla_final = local_date + timedelta(minutes=flex_mins)
                 else:
                     next_day = local_date.replace(hour=0, minute=0, second=0) + timedelta(days=1)
-                    sla_final = next_day + timedelta(hours=11, minutes=59, seconds=59) - timedelta(hours=UTC_LOCAL)
+                    sla_final = next_day + timedelta(hours=11, minutes=59, seconds=59)
+                if is_utc:
+                    sla_final = sla_final - timedelta(hours=UTC_LOCAL)
         elif schedule.days_after_creation and schedule.days_after_creation > 0:
             if schedule.only_business_days:
                 curr_date = local_date
@@ -226,34 +236,50 @@ class SaleOrder(models.Model):
             else:
                 target_local = local_date.replace(hour=23, minute=59, second=59) + timedelta(days=schedule.days_after_creation)
 
-            sla_final = target_local - timedelta(hours=UTC_LOCAL)
+            # Restricción de fin de semana aplicada sobre hora local
             if not schedule.only_business_days:
                 is_weekend = target_local.weekday() in (5, 6)
-                sla_final = self._get_business_day(sla_final, restrict_only_sunday=is_weekend)
+                target_local = self._get_business_day(target_local, restrict_only_sunday=is_weekend)
+
+            sla_final = target_local if not is_utc else (target_local - timedelta(hours=UTC_LOCAL))
         else:
-            hours_to_add = 0
-            is_weekend = False
+            # Horarios por día de la semana
+            curr_local = local_date
+            hours_to_add = 0.0
+            days_advanced = 0
 
-            if day_of_week in ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']:
-                hours_to_add = schedule.monday_to_friday_
-            elif day_of_week == 'saturday':
-                hours_to_add = schedule.saturday
-                is_weekend = True
-            elif day_of_week == 'sunday':
-                hours_to_add = schedule.sunday
-                is_weekend = True
-
-            if hours_to_add >= 0:
-                sla_final = local_date + timedelta(hours=hours_to_add)
-                if m_clean in ['ventasdepiso', 'mayoreonaes']:
-                    sla_final = sla_final.replace(hour=15, minute=0, second=0)
-                    sla_final = sla_final - timedelta(hours=UTC_LOCAL)
-                    sla_final = self._get_business_day(sla_final, False)
+            # Si el día actual no tiene horas configuradas (> 0), avanzar al siguiente día que sí opere
+            for _ in range(7):
+                dow = curr_local.strftime('%A').lower()
+                if dow in ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']:
+                    h = schedule.monday_to_friday_
+                elif dow == 'saturday':
+                    h = schedule.saturday
+                elif dow == 'sunday':
+                    h = schedule.sunday
                 else:
-                    sla_final = sla_final.replace(hour=23, minute=59, second=59)
-                    sla_final = sla_final - timedelta(hours=UTC_LOCAL)
-                    restrict_sunday = True if (is_weekend and not schedule.only_business_days) else False
-                    sla_final = self._get_business_day(sla_final, restrict_sunday)
+                    h = 0.0
+
+                if h > 0:
+                    hours_to_add = h
+                    break
+                curr_local = (curr_local + timedelta(days=1)).replace(hour=0, minute=0, second=0)
+                days_advanced += 1
+
+            if hours_to_add > 0:
+                if days_advanced > 0:
+                    target_local = curr_local.replace(hour=23, minute=59, second=59)
+                else:
+                    target_local = (local_date + timedelta(hours=hours_to_add)).replace(hour=23, minute=59, second=59)
+
+                if m_clean in ['ventasdepiso', 'mayoreonaes']:
+                    target_local = target_local.replace(hour=15, minute=0, second=0)
+                    target_local = self._get_business_day(target_local, False)
+                else:
+                    is_weekend = target_local.weekday() in (5, 6)
+                    target_local = self._get_business_day(target_local, restrict_only_sunday=is_weekend)
+
+                sla_final = target_local if not is_utc else (target_local - timedelta(hours=UTC_LOCAL))
 
         if schedule.auto_fill_dates and sla_final:
             return sla_final, None, sla_final
@@ -266,32 +292,46 @@ class SaleOrder(models.Model):
             if order.sla_manual_override and not force:
                 continue
 
-            channel = order.channel or ''
-            schedule = False
-            if channel:
-                schedule = self.env['marketplace.schedule'].search([
-                    ('marketplace', '=', channel)
-                ], limit=1)
-                if not schedule:
-                    schedules = self.env['marketplace.schedule'].search([])
-                    for sch in schedules:
-                        if sch.marketplace and sch.marketplace.lower() in channel.lower():
-                            schedule = sch
-                            break
+            channel = normalize_channel(order.channel or '')
+            if not channel:
+                continue
 
-            sla_source = schedule.sla_source if schedule else 'auto'
+            # Buscar regla ESPECÍFICA para este marketplace
+            schedule = self.env['marketplace.schedule'].search([
+                ('marketplace', '=ilike', channel.strip())
+            ], limit=1)
+
             sla = False
             prio = False
 
-            # Evaluar yuju_due_date directamente (respetando fecha del marketplace tal cual)
+            # Si NO existe regla específica para este marketplace, NO calcular SLA
+            if not schedule:
+                # Solo respetar yuju_due_date si viene directo del marketplace
+                if getattr(order, 'yuju_due_date', False):
+                    parsed_yuju = parse_yuju_date(order.yuju_due_date)
+                    if parsed_yuju:
+                        sla = parsed_yuju
+                        prio = parsed_yuju
+
+                if order.sla_date != sla:
+                    order.write({'sla_date': sla, 'priority_date': prio})
+                continue
+
+            sla_source = schedule.sla_source or 'auto'
+
+            # Evaluar yuju_due_date directamente si la regla lo contempla
             if sla_source in ('yuju', 'auto') and getattr(order, 'yuju_due_date', False):
                 parsed_yuju = parse_yuju_date(order.yuju_due_date)
                 if parsed_yuju:
                     sla = parsed_yuju
-                    if schedule and schedule.auto_fill_dates:
+                    if schedule.auto_fill_dates:
                         prio = parsed_yuju
 
-            if not sla or sla_source == 'calculated':
+            # SOLO calcular si la regla específica lo indica explícitamente:
+            # - 'calculated': siempre calcula
+            # - 'auto': calcula SOLO si no vino fecha de Yuju
+            # - 'yuju': NUNCA calcula (si falta Yuju, queda sin SLA)
+            if (sla_source == 'calculated') or (sla_source == 'auto' and not sla):
                 base_dt = order.date_order or order.create_date or fields.Datetime.now()
                 calc_sla, _, calc_prio = order._compute_sla_value_date(
                     channel, base_dt, getattr(order, 'fulfillment', False)

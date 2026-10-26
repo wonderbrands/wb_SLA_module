@@ -191,84 +191,104 @@ class Picking(models.Model):
         return date_val
 
     def _compute_sla_value_date(self, channel_name, date_order, fulfillment):
-        if not date_order:
+        """ Calcula SLA según marketplace.schedule específica """
+        if not date_order or not channel_name:
             return False, False, False
 
-        schedule = False
-        if channel_name:
-            schedule = self.env['marketplace.schedule'].search([
-                ('marketplace', '=', channel_name)
-            ], limit=1)
-            if not schedule:
-                schedules = self.env['marketplace.schedule'].search([])
-                for sch in schedules:
-                    if sch.marketplace and sch.marketplace.lower() in channel_name.lower():
-                        schedule = sch
-                        break
+        clean_channel = channel_name.strip()
+        schedule = self.env['marketplace.schedule'].search([
+            ('marketplace', '=ilike', clean_channel)
+        ], limit=1)
 
-        if not schedule:
-            _logger.info(f"SLA: No se encontró horario para el marketplace {channel_name}")
+        # SOLO debe calcularse si existe una regla por marketplace específica y no es exclusiva de Yuju
+        if not schedule or schedule.sla_source == 'yuju':
             return False, False, False
 
         local_date = date_order + timedelta(hours=UTC_LOCAL)
-        day_of_week = local_date.strftime('%A').lower()
-        
-        limit_hour_time = datetime.strptime('12:00:00', '%H:%M:%S').time()
-        
-        m_clean = (channel_name or "").lower().replace(" ", "")
+        m_clean = (clean_channel or "").lower().replace(" ", "")
         fulfillment_clean = str(fulfillment).lower() if fulfillment else ""
-
         sla_final = False
+
+        is_utc = False
+        if clean_channel:
+            ch_low = clean_channel.lower()
+            if 'amazon' in ch_low or 'walmart' in ch_low:
+                is_utc = True
+            try:
+                cfg = self.env['wmds.mysql.config'].sudo().search([
+                    ('marketplace', 'ilike', clean_channel.strip())
+                ], limit=1)
+                if cfg and cfg.sla_timezone:
+                    is_utc = (cfg.sla_timezone == 'utc')
+            except Exception:
+                pass
 
         if ('mercadolibre' in m_clean or 'mercado' in m_clean) and (fulfillment_clean == 'fbf'):
             flex_mins = schedule.flex or 0
+            limit_hour_time = datetime.strptime('12:00:00', '%H:%M:%S').time()
             if flex_mins > 0:
                 if local_date.time() <= limit_hour_time:
-                    sla_final = date_order + timedelta(minutes=flex_mins)
+                    sla_final = local_date + timedelta(minutes=flex_mins)
                 else:
                     next_day = local_date.replace(hour=0, minute=0, second=0) + timedelta(days=1)
-                    sla_final = next_day + timedelta(hours=11, minutes=59, seconds=59) - timedelta(hours=UTC_LOCAL)
+                    sla_final = next_day + timedelta(hours=11, minutes=59, seconds=59)
+                if is_utc:
+                    sla_final = sla_final - timedelta(hours=UTC_LOCAL)
         elif schedule.days_after_creation and schedule.days_after_creation > 0:
             if schedule.only_business_days:
                 curr_date = local_date
                 added = 0
                 while added < schedule.days_after_creation:
                     curr_date += timedelta(days=1)
-                    if curr_date.weekday() not in (5, 6): # 5=Sábado, 6=Domingo
+                    if curr_date.weekday() not in (5, 6):
                         added += 1
                 target_local = curr_date.replace(hour=23, minute=59, second=59)
             else:
                 target_local = local_date.replace(hour=23, minute=59, second=59) + timedelta(days=schedule.days_after_creation)
 
-            sla_final = target_local - timedelta(hours=UTC_LOCAL)
             if not schedule.only_business_days:
                 is_weekend = target_local.weekday() in (5, 6)
-                sla_final = self._get_business_day(sla_final, restrict_only_sunday=is_weekend)
+                target_local = self._get_business_day(target_local, restrict_only_sunday=is_weekend)
+
+            sla_final = target_local if not is_utc else (target_local - timedelta(hours=UTC_LOCAL))
         else:
-            hours_to_add = 0
-            is_weekend = False
+            # Horarios por día de la semana
+            curr_local = local_date
+            hours_to_add = 0.0
+            days_advanced = 0
 
-            if day_of_week in ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']:
-                hours_to_add = schedule.monday_to_friday_
-            elif day_of_week == 'saturday':
-                hours_to_add = schedule.saturday
-                is_weekend = True
-            elif day_of_week == 'sunday':
-                hours_to_add = schedule.sunday
-                is_weekend = True
-
-            if hours_to_add >= 0:
-                sla_final = local_date + timedelta(hours=hours_to_add)
-                
-                if m_clean in ['ventasdepiso', 'mayoreonaes']:
-                    sla_final = sla_final.replace(hour=15, minute=0, second=0)
-                    sla_final = sla_final - timedelta(hours=UTC_LOCAL)
-                    sla_final = self._get_business_day(sla_final, False)
+            # Si el día actual no tiene horas configuradas (> 0), avanzar al siguiente día que sí opere
+            for _ in range(7):
+                dow = curr_local.strftime('%A').lower()
+                if dow in ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']:
+                    h = schedule.monday_to_friday_
+                elif dow == 'saturday':
+                    h = schedule.saturday
+                elif dow == 'sunday':
+                    h = schedule.sunday
                 else:
-                    sla_final = sla_final.replace(hour=23, minute=59, second=59)
-                    sla_final = sla_final - timedelta(hours=UTC_LOCAL)
-                    restrict_sunday = True if (is_weekend and not schedule.only_business_days) else False
-                    sla_final = self._get_business_day(sla_final, restrict_sunday)
+                    h = 0.0
+
+                if h > 0:
+                    hours_to_add = h
+                    break
+                curr_local = (curr_local + timedelta(days=1)).replace(hour=0, minute=0, second=0)
+                days_advanced += 1
+
+            if hours_to_add > 0:
+                if days_advanced > 0:
+                    target_local = curr_local.replace(hour=23, minute=59, second=59)
+                else:
+                    target_local = (local_date + timedelta(hours=hours_to_add)).replace(hour=23, minute=59, second=59)
+
+                if m_clean in ['ventasdepiso', 'mayoreonaes']:
+                    target_local = target_local.replace(hour=15, minute=0, second=0)
+                    target_local = self._get_business_day(target_local, False)
+                else:
+                    is_weekend = target_local.weekday() in (5, 6)
+                    target_local = self._get_business_day(target_local, restrict_only_sunday=is_weekend)
+
+                sla_final = target_local if not is_utc else (target_local - timedelta(hours=UTC_LOCAL))
 
         if schedule.auto_fill_dates and sla_final:
             return sla_final, None, sla_final
