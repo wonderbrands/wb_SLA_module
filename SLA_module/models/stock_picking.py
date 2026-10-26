@@ -121,7 +121,7 @@ class Picking(models.Model):
                     picking.sla_priority_label = 'Quedan 6 horas para la recolecta'
                 elif diff_hours <= 24.0:
                     picking.sla_priority_level = 'notice_24h'
-                    picking.sla_priority_label = 'Queda 1 día para la recolecta'
+                    picking.sla_priority_label = 'Quedan unas horas para la recolecta'
                 else:
                     picking.sla_priority_level = 'normal'
                     picking.sla_priority_label = 'En tiempo'

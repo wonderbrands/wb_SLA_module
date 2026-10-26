@@ -163,7 +163,7 @@ class SaleOrder(models.Model):
                     order.sla_priority_label = 'Quedan 6 horas para la recolecta'
                 elif diff_hours <= 24.0:
                     order.sla_priority_level = 'notice_24h'
-                    order.sla_priority_label = 'Queda 1 día para la recolecta'
+                    order.sla_priority_label = 'Quedan unas horas para la recolecta'
                 else:
                     order.sla_priority_level = 'normal'
                     order.sla_priority_label = 'En tiempo'
