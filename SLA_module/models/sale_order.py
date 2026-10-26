@@ -51,7 +51,11 @@ def parse_yuju_date(dt_str):
             clean_str = f"{date_part} {hour}:{minute}:{second}"
         else:
             clean_str = clean_str.split('.')[0]
-        return fields.Datetime.to_datetime(clean_str)
+        local_dt = fields.Datetime.to_datetime(clean_str)
+        if not local_dt:
+            return False
+        # yuju_due_date viene en hora local CDMX (UTC-6); convertir a UTC para guardar en DB Odoo
+        return local_dt - timedelta(hours=UTC_LOCAL)
     except Exception as e:
         _logger.error(f"Error parseando yuju_due_date '{dt_str}': {e}")
         return False
