@@ -4,4 +4,13 @@
         <field name="name">Acceso a SLA-date</field>
         <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
     </record>
+
+    <!-- Permitir que administradores del sistema y administradores de ventas hereden acceso al menú SLA automáticamente -->
+    <record id="base.group_system" model="res.groups">
+        <field name="implied_ids" eval="[(4, ref('group_sla_date_user'))]"/>
+    </record>
+
+    <record id="sales_team.group_sale_manager" model="res.groups">
+        <field name="implied_ids" eval="[(4, ref('group_sla_date_user'))]"/>
+    </record>
 </odoo>
