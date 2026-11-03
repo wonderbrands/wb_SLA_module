@@ -86,7 +86,6 @@ class SaleOrder(models.Model):
     _inherit = 'sale.order'
 
     sla_date = fields.Datetime(string="Fecha límite SLA", index=True, copy=False)
-    priority_date = fields.Datetime(string="Priority Date", default=False, copy=False)
     
     sla_priority_level = fields.Selection([
         ('critical_1h', 'Crítico (< 1h)'),
@@ -122,7 +121,6 @@ class SaleOrder(models.Model):
     @api.depends('sla_date', 'state', 'sla_manual_override')
     def _compute_sla_priority(self):
         now_utc = fields.Datetime.now()
-        now_local = now_utc + timedelta(hours=UTC_LOCAL)
         for order in self:
             if order.state == 'cancel' or not order.sla_date:
                 order.sla_priority_level = 'normal'
@@ -130,31 +128,14 @@ class SaleOrder(models.Model):
                 continue
 
             effective_sla = order.sla_date
-            channel = getattr(order, 'channel', False) or ''
-            is_utc = False
-            if channel:
-                ch_low = channel.lower()
-                if 'amazon' in ch_low or 'walmart' in ch_low:
-                    is_utc = True
-                try:
-                    cfg = self.env['wmds.mysql.config'].sudo().search([
-                        ('marketplace', 'ilike', channel.strip())
-                    ], limit=1)
-                    if cfg and cfg.sla_timezone:
-                        is_utc = (cfg.sla_timezone == 'utc')
-                except Exception:
-                    pass
-
-            target_now = now_utc if is_utc else now_local
-
-            if effective_sla < target_now:
+            if effective_sla < now_utc:
                 order.sla_priority_level = 'overdue'
                 order.sla_priority_label = 'SLA Vencido'
-            elif effective_sla <= target_now + timedelta(hours=1):
+            elif effective_sla <= now_utc + timedelta(hours=1):
                 order.sla_priority_level = 'critical_1h'
                 order.sla_priority_label = 'Está a punto de llegar la recolecta (< 1h)'
             else:
-                diff_hours = (effective_sla - target_now).total_seconds() / 3600.0
+                diff_hours = (effective_sla - now_utc).total_seconds() / 3600.0
                 if diff_hours <= 2.0:
                     order.sla_priority_level = 'urgent_2h'
                     order.sla_priority_label = 'Quedan 2 horas para la recolecta'
@@ -285,10 +266,7 @@ class SaleOrder(models.Model):
 
                 sla_final = target_local if not is_utc else (target_local - timedelta(hours=UTC_LOCAL))
 
-        if schedule.auto_fill_dates and sla_final:
-            return sla_final, None, sla_final
-
-        return sla_final, None, None
+        return sla_final, None, sla_final
 
     def calculate_and_assign_sla(self, force=False):
         """ Calcula y asigna SLA en la orden de venta y propaga a sus albaranes """
@@ -306,7 +284,6 @@ class SaleOrder(models.Model):
             ], limit=1)
 
             sla = False
-            prio = False
 
             # Si NO existe regla específica para este marketplace, NO calcular SLA
             if not schedule:
@@ -315,10 +292,12 @@ class SaleOrder(models.Model):
                     parsed_yuju = parse_yuju_date(order.yuju_due_date)
                     if parsed_yuju:
                         sla = parsed_yuju
-                        prio = parsed_yuju
 
                 if order.sla_date != sla:
-                    order.write({'sla_date': sla, 'priority_date': prio})
+                    vals = {'sla_date': sla}
+                    if not order.sla_original_date and sla:
+                        vals['sla_original_date'] = sla
+                    order.write(vals)
                 continue
 
             sla_source = schedule.sla_source or 'auto'
@@ -328,8 +307,6 @@ class SaleOrder(models.Model):
                 parsed_yuju = parse_yuju_date(order.yuju_due_date)
                 if parsed_yuju:
                     sla = parsed_yuju
-                    if schedule.auto_fill_dates:
-                        prio = parsed_yuju
 
             # SOLO calcular si la regla específica lo indica explícitamente:
             # - 'calculated': siempre calcula
@@ -337,12 +314,11 @@ class SaleOrder(models.Model):
             # - 'yuju': NUNCA calcula (si falta Yuju, queda sin SLA)
             if (sla_source == 'calculated') or (sla_source == 'auto' and not sla):
                 base_dt = order.date_order or order.create_date or fields.Datetime.now()
-                calc_sla, _, calc_prio = order._compute_sla_value_date(
+                calc_sla, _, _ = order._compute_sla_value_date(
                     channel, base_dt, getattr(order, 'fulfillment', False)
                 )
                 if calc_sla:
                     sla = calc_sla
-                    prio = calc_prio
 
             if sla:
                 # -------------------------------------------------------------
@@ -405,7 +381,6 @@ class SaleOrder(models.Model):
 
                     vals = {
                         'sla_date': new_sla,
-                        'priority_date': new_sla,
                         'sla_original_date': old_sla,
                         'sla_manual_override': True,
                         'sla_override_reason': reason,
@@ -413,6 +388,8 @@ class SaleOrder(models.Model):
                         'sla_override_date': now_dt,
                         'sla_override_user_id': now_user_id,
                     }
+                    if not order.sla_original_date and old_sla:
+                        vals['sla_original_date'] = old_sla
                     order.write(vals)
 
                     # Registrar en historial de modificaciones SLA
@@ -443,30 +420,95 @@ class SaleOrder(models.Model):
 
                 vals = {
                     'sla_date': sla,
-                    'priority_date': prio or sla,
                 }
+                if not order.sla_original_date and sla:
+                    vals['sla_original_date'] = sla
                 order.write(vals)
 
     @api.model
     def _cron_update_sla_priorities(self):
-        """ Cron job ejecutable periódicamente para recalcular y sincronizar SLA en órdenes de venta """
+        """ Cron job ejecutable periódicamente para recalcular y sincronizar SLA en órdenes de venta y albaranes """
         orders_without_sla = self.search([
             ('state', '!=', 'cancel'),
             ('sla_date', '=', False),
-        ], limit=500)
+        ], limit=200)
         for order in orders_without_sla:
             try:
                 order.calculate_and_assign_sla()
             except Exception as e:
                 _logger.error(f"Error calculando SLA cron para venta {order.name}: {e}")
 
-        active_orders = self.search([
-            ('state', '!=', 'cancel'),
-            ('sla_date', '!=', False)
-        ])
-        if active_orders:
-            active_orders._compute_sla_priority()
-            _logger.info(f"Cron SLA Priorities: Se actualizaron {len(active_orders)} órdenes de venta.")
+        # Actualización masiva por SQL de niveles de prioridad y etiquetas en sale_order
+        sql_so = """
+            UPDATE sale_order
+            SET sla_priority_level = CASE
+                    WHEN sla_date < (NOW() AT TIME ZONE 'UTC') THEN 'overdue'
+                    WHEN sla_date <= (NOW() AT TIME ZONE 'UTC') + interval '1 hour' THEN 'critical_1h'
+                    WHEN sla_date <= (NOW() AT TIME ZONE 'UTC') + interval '2 hours' THEN 'urgent_2h'
+                    WHEN sla_date <= (NOW() AT TIME ZONE 'UTC') + interval '6 hours' THEN 'warning_6h'
+                    WHEN sla_date <= (NOW() AT TIME ZONE 'UTC') + interval '24 hours' THEN 'notice_24h'
+                    ELSE 'normal'
+                END,
+                sla_priority_label = CASE
+                    WHEN sla_date < (NOW() AT TIME ZONE 'UTC') THEN 'SLA Vencido'
+                    WHEN sla_date <= (NOW() AT TIME ZONE 'UTC') + interval '1 hour' THEN 'Está a punto de llegar la recolecta (< 1h)'
+                    WHEN sla_date <= (NOW() AT TIME ZONE 'UTC') + interval '2 hours' THEN 'Quedan 2 horas para la recolecta'
+                    WHEN sla_date <= (NOW() AT TIME ZONE 'UTC') + interval '6 hours' THEN 'Quedan 6 horas para la recolecta'
+                    WHEN sla_date <= (NOW() AT TIME ZONE 'UTC') + interval '24 hours' THEN 'Quedan unas horas para la recolecta'
+                    ELSE 'En tiempo'
+                END
+            WHERE state != 'cancel'
+              AND sla_date IS NOT NULL
+              AND (
+                  sla_priority_level IS DISTINCT FROM CASE
+                      WHEN sla_date < (NOW() AT TIME ZONE 'UTC') THEN 'overdue'
+                      WHEN sla_date <= (NOW() AT TIME ZONE 'UTC') + interval '1 hour' THEN 'critical_1h'
+                      WHEN sla_date <= (NOW() AT TIME ZONE 'UTC') + interval '2 hours' THEN 'urgent_2h'
+                      WHEN sla_date <= (NOW() AT TIME ZONE 'UTC') + interval '6 hours' THEN 'warning_6h'
+                      WHEN sla_date <= (NOW() AT TIME ZONE 'UTC') + interval '24 hours' THEN 'notice_24h'
+                      ELSE 'normal'
+                  END
+              );
+        """
+        self.env.cr.execute(sql_so)
+        updated_so = self.env.cr.rowcount
+
+        # Actualización masiva por SQL de niveles de prioridad y etiquetas en stock_picking
+        sql_sp = """
+            UPDATE stock_picking
+            SET sla_priority_level = CASE
+                    WHEN sla_date < (NOW() AT TIME ZONE 'UTC') THEN 'overdue'
+                    WHEN sla_date <= (NOW() AT TIME ZONE 'UTC') + interval '1 hour' THEN 'critical_1h'
+                    WHEN sla_date <= (NOW() AT TIME ZONE 'UTC') + interval '2 hours' THEN 'urgent_2h'
+                    WHEN sla_date <= (NOW() AT TIME ZONE 'UTC') + interval '6 hours' THEN 'warning_6h'
+                    WHEN sla_date <= (NOW() AT TIME ZONE 'UTC') + interval '24 hours' THEN 'notice_24h'
+                    ELSE 'normal'
+                END,
+                sla_priority_label = CASE
+                    WHEN sla_date < (NOW() AT TIME ZONE 'UTC') THEN 'SLA Vencido'
+                    WHEN sla_date <= (NOW() AT TIME ZONE 'UTC') + interval '1 hour' THEN 'Está a punto de llegar la recolecta (< 1h)'
+                    WHEN sla_date <= (NOW() AT TIME ZONE 'UTC') + interval '2 hours' THEN 'Quedan 2 horas para la recolecta'
+                    WHEN sla_date <= (NOW() AT TIME ZONE 'UTC') + interval '6 hours' THEN 'Quedan 6 horas para la recolecta'
+                    WHEN sla_date <= (NOW() AT TIME ZONE 'UTC') + interval '24 hours' THEN 'Quedan unas horas para la recolecta'
+                    ELSE 'En tiempo'
+                END
+            WHERE state NOT IN ('done', 'cancel')
+              AND sla_date IS NOT NULL
+              AND (
+                  sla_priority_level IS DISTINCT FROM CASE
+                      WHEN sla_date < (NOW() AT TIME ZONE 'UTC') THEN 'overdue'
+                      WHEN sla_date <= (NOW() AT TIME ZONE 'UTC') + interval '1 hour' THEN 'critical_1h'
+                      WHEN sla_date <= (NOW() AT TIME ZONE 'UTC') + interval '2 hours' THEN 'urgent_2h'
+                      WHEN sla_date <= (NOW() AT TIME ZONE 'UTC') + interval '6 hours' THEN 'warning_6h'
+                      WHEN sla_date <= (NOW() AT TIME ZONE 'UTC') + interval '24 hours' THEN 'notice_24h'
+                      ELSE 'normal'
+                  END
+              );
+        """
+        self.env.cr.execute(sql_sp)
+        updated_sp = self.env.cr.rowcount
+
+        _logger.info(f"Cron SLA Priorities: Actualizadas {updated_so} órdenes de venta y {updated_sp} albaranes.")
 
     @api.model_create_multi
     def create(self, vals_list):

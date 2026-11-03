@@ -26,8 +26,6 @@
                             <field name="sameDay_nextDay" 
                                    invisible="auxiliar_2 != 'True'"
                                    help="Este campo solo es para Shopify con envio Same day / Next day"/>
-                                   
-                            <field name="auto_fill_dates"/>
                         </group>
                     </sheet>
                 </form>
@@ -51,7 +49,6 @@
                     
                     <field name="flex" optional="show"/>
                     <field name="sameDay_nextDay" optional="hide"/>
-                    <field name="auto_fill_dates"/>
                 </list>
             </field>
         </record>

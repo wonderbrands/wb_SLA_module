@@ -21,7 +21,6 @@
                     <group>
                         <group string="Métricas de Compromiso de Despacho (SLA)">
                             <field name="sla_date" widget="datetime" readonly="1"/>
-                            <field name="priority_date" widget="datetime" readonly="1"/>
                             <field name="sla_priority_level" readonly="1" widget="badge"
                                    decoration-danger="sla_priority_level == 'overdue'"
                                    decoration-warning="sla_priority_level in ('critical_1h', 'urgent_2h')"

@@ -87,7 +87,6 @@ class SlaOverrideWizard(models.TransientModel):
             old_sla = sale.sla_date
             vals = {
                 'sla_date': self.new_sla_date,
-                'priority_date': self.new_sla_date,
                 'sla_manual_override': True,
                 'sla_override_reason': self.reason,
                 'sla_override_note': self.note,
