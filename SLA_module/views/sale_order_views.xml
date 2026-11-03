@@ -77,4 +77,22 @@
             </xpath>
         </field>
     </record>
+
+    <!-- Extensión de Lista de Órdenes de Venta -->
+    <record id="view_order_tree_sla_inherit" model="ir.ui.view">
+        <field name="name">sale.order.list.sla.inherit</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='state']" position="before">
+                <field name="sla_date" optional="show" widget="datetime"/>
+                <field name="sla_priority_level" optional="show" widget="badge"
+                       decoration-danger="sla_priority_level == 'overdue'"
+                       decoration-warning="sla_priority_level in ('critical_1h', 'urgent_2h')"
+                       decoration-info="sla_priority_level == 'warning_6h'"
+                       decoration-success="sla_priority_level in ('notice_24h', 'normal')"/>
+                <field name="sla_manual_override" optional="hide"/>
+            </xpath>
+        </field>
+    </record>
 </odoo>

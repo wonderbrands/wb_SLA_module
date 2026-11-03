@@ -439,21 +439,6 @@ class SaleOrder(models.Model):
                     except Exception:
                         pass
 
-                    # Sincronizar transferencias abiertas
-                    open_pickings = order.picking_ids.filtered(lambda p: p.state not in ('done', 'cancel'))
-                    if open_pickings:
-                        open_pickings.write({
-                            'sla_date': new_sla,
-                            'priority_date': new_sla,
-                            'sla_original_date': old_sla,
-                            'sla_manual_override': True,
-                            'sla_override_reason': reason,
-                            'sla_override_note': note,
-                            'sla_override_date': now_dt,
-                            'sla_override_user_id': now_user_id,
-                        })
-                        open_pickings._compute_sla_priority()
-
                     continue
 
                 vals = {
@@ -462,14 +447,26 @@ class SaleOrder(models.Model):
                 }
                 order.write(vals)
 
-                # Sincronizar transferencias abiertas
-                open_pickings = order.picking_ids.filtered(lambda p: p.state not in ('done', 'cancel'))
-                if open_pickings:
-                    open_pickings.write({
-                        'sla_date': sla,
-                        'priority_date': prio or sla,
-                    })
-                    open_pickings._compute_sla_priority()
+    @api.model
+    def _cron_update_sla_priorities(self):
+        """ Cron job ejecutable periódicamente para recalcular y sincronizar SLA en órdenes de venta """
+        orders_without_sla = self.search([
+            ('state', '!=', 'cancel'),
+            ('sla_date', '=', False),
+        ], limit=500)
+        for order in orders_without_sla:
+            try:
+                order.calculate_and_assign_sla()
+            except Exception as e:
+                _logger.error(f"Error calculando SLA cron para venta {order.name}: {e}")
+
+        active_orders = self.search([
+            ('state', '!=', 'cancel'),
+            ('sla_date', '!=', False)
+        ])
+        if active_orders:
+            active_orders._compute_sla_priority()
+            _logger.info(f"Cron SLA Priorities: Se actualizaron {len(active_orders)} órdenes de venta.")
 
     @api.model_create_multi
     def create(self, vals_list):

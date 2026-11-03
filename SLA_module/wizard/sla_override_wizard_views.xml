@@ -7,7 +7,7 @@
             <form string="Reasignación / Empuje Manual de SLA">
                 <sheet>
                     <div class="alert alert-info" role="alert">
-                        Utilice este asistente para posponer o reasignar la fecha límite de SLA (por ejemplo, ante falta de espacio en la unidad de transporte del carrier).
+                        Utilice este asistente para posponer o reasignar la fecha límite de SLA en las órdenes de venta seleccionadas.
                     </div>
                     <group>
                         <group>
@@ -19,29 +19,19 @@
                             <field name="note" placeholder="Detalle el motivo o número de incidencia si aplica..."/>
                         </group>
                     </group>
-                    <notebook>
-                        <page string="Albaranes Afectados" invisible="not picking_ids">
-                            <field name="picking_ids" readonly="1">
-                                <list>
-                                    <field name="name"/>
-                                    <field name="origin"/>
-                                    <field name="sla_date" string="SLA Actual"/>
-                                    <field name="sla_priority_level"/>
-                                    <field name="state"/>
-                                </list>
-                            </field>
-                        </page>
-                        <page string="Órdenes de Venta Afectadas" invisible="not sale_ids">
-                            <field name="sale_ids" readonly="1">
-                                <list>
-                                    <field name="name"/>
-                                    <field name="date_order"/>
-                                    <field name="partner_id"/>
-                                    <field name="state"/>
-                                </list>
-                            </field>
-                        </page>
-                    </notebook>
+                    <group string="Órdenes de Venta Afectadas">
+                        <field name="sale_ids" readonly="1" nolabel="1">
+                            <list>
+                                <field name="name"/>
+                                <field name="channel"/>
+                                <field name="date_order"/>
+                                <field name="sla_date" string="SLA Actual"/>
+                                <field name="sla_priority_level" string="Prioridad"/>
+                                <field name="partner_id"/>
+                                <field name="state"/>
+                            </list>
+                        </field>
+                    </group>
                 </sheet>
                 <footer>
                     <button string="Aplicar Reasignación" name="action_apply_override" type="object" class="btn-primary"/>
@@ -51,17 +41,7 @@
         </field>
     </record>
 
-    <!-- Action para abrir el Wizard -->
-    <record id="action_sla_override_wizard" model="ir.actions.act_window">
-        <field name="name">Reasignar / Empujar SLA</field>
-        <field name="res_model">sla.override.wizard</field>
-        <field name="view_mode">form</field>
-        <field name="target">new</field>
-        <field name="binding_model_id" ref="stock.model_stock_picking"/>
-        <field name="binding_view_types">list,form</field>
-    </record>
-
-    <!-- Binding también en sale.order -->
+    <!-- Action para abrir el Wizard desde sale.order -->
     <record id="action_sla_override_wizard_sale" model="ir.actions.act_window">
         <field name="name">Reasignar / Empujar SLA</field>
         <field name="res_model">sla.override.wizard</field>
