@@ -23,7 +23,6 @@
                         <field name="sale_ids" readonly="1" nolabel="1">
                             <list>
                                 <field name="name"/>
-                                <field name="channel"/>
                                 <field name="date_order"/>
                                 <field name="sla_date" string="SLA Actual"/>
                                 <field name="sla_priority_level" string="Prioridad"/>

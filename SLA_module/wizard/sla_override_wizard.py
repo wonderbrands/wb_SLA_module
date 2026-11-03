@@ -39,8 +39,9 @@ class SlaOverrideWizard(models.TransientModel):
         if active_ids:
             sales = self.env['sale.order'].browse(active_ids)
             for s in sales:
-                if s.channel:
-                    channels.add(s.channel.strip())
+                ch = getattr(s, 'channel', False)
+                if ch:
+                    channels.add(ch.strip())
 
         options = [('all', 'Todos los Marketplaces seleccionados')]
         for c in sorted(list(channels)):
@@ -68,7 +69,7 @@ class SlaOverrideWizard(models.TransientModel):
         # Filtrar por marketplace si se eligió uno específico
         target_sales = self.sale_ids
         if self.marketplace and self.marketplace != 'all':
-            target_sales = target_sales.filtered(lambda s: (s.channel or '').strip() == self.marketplace)
+            target_sales = target_sales.filtered(lambda s: (getattr(s, 'channel', False) or '').strip() == self.marketplace)
 
         if not target_sales:
             raise UserError(_("No hay órdenes de venta que coincidan con el marketplace '%s'.") % self.marketplace)
