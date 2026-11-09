@@ -37,7 +37,7 @@ def normalize_channel(channel_str):
 
 
 
-def parse_yuju_date(dt_str):
+def parse_yuju_date(dt_str, is_utc=False):
     if not dt_str:
         return False
     try:
@@ -56,8 +56,10 @@ def parse_yuju_date(dt_str):
         local_dt = fields.Datetime.to_datetime(clean_str)
         if not local_dt:
             return False
-        # yuju_due_date viene en hora local CDMX (UTC-6); convertir a UTC para guardar en DB Odoo
-        return local_dt - timedelta(hours=UTC_LOCAL)
+        # yuju_due_date viene en hora local CDMX (UTC-6).
+        # Si el canal se maneja en 'local' (is_utc=False), se conserva en hora local;
+        # si el canal se maneja en 'utc' (is_utc=True), se convierte a UTC.
+        return (local_dt - timedelta(hours=UTC_LOCAL)) if is_utc else local_dt
     except Exception as e:
         _logger.error(f"Error parseando yuju_due_date '{dt_str}': {e}")
         return False
@@ -195,6 +197,64 @@ class SaleOrder(models.Model):
             return bool(schedule.exclude_full)
         return True
 
+    def _has_shipping_guide(self):
+        """
+        Determina si la orden de venta ya cuenta con guía de envío asignada:
+        - yuju_carrier_tracking_ref / data_tracking_readwrite con valor
+        - adjuntos en data_attachment_ids / attachments (sale.order.attachment)
+        - data_ready_to_pick activo
+        - algún stock.picking activo con carrier_tracking_ref
+        """
+        self.ensure_one()
+        tracking = (getattr(self, 'yuju_carrier_tracking_ref', '') or '').strip()
+        if tracking and tracking.lower() != 'false':
+            return True
+        if getattr(self, 'data_ready_to_pick', False):
+            return True
+        attach_ids = getattr(self, 'data_attachment_ids', False) or getattr(self, 'attachments', False)
+        if attach_ids and len(attach_ids) > 0:
+            return True
+        for picking in getattr(self, 'picking_ids', []):
+            if picking.state != 'cancel' and (getattr(picking, 'carrier_tracking_ref', '') or '').strip():
+                return True
+        return False
+
+    def _get_guide_assigned_date(self):
+        """
+        Obtiene la fecha (UTC naive) en que se agregó la guía de envío a la orden.
+        Busca primero en wmds.log o en sale.order.attachment, y si no existe usa el momento actual.
+        """
+        self.ensure_one()
+        try:
+            if 'wmds.log' in self.env:
+                log_rec = self.env['wmds.log'].sudo().search([
+                    ('sale', '=', self.id),
+                    ('log', 'ilike', 'guía'),
+                ], order='date desc, id desc', limit=1)
+                if log_rec and log_rec.date:
+                    return log_rec.date
+        except Exception:
+            pass
+        try:
+            attach_ids = getattr(self, 'data_attachment_ids', False) or getattr(self, 'attachments', False)
+            if attach_ids:
+                dates = [a.create_date for a in attach_ids if getattr(a, 'create_date', False)]
+                if dates:
+                    return max(dates)
+        except Exception:
+            pass
+        return fields.Datetime.now()
+
+    def _get_next_business_day_end(self, local_dt):
+        """
+        Retorna el día siguiente hábil (Lunes-Viernes) a las 23:59:59 en hora local.
+        Si local_dt es Viernes, Sábado o Domingo, el día siguiente hábil es Lunes.
+        """
+        next_day = local_dt + timedelta(days=1)
+        while next_day.weekday() in (5, 6):  # 5=Sábado, 6=Domingo
+            next_day += timedelta(days=1)
+        return next_day.replace(hour=23, minute=59, second=59)
+
     def _get_business_day(self, date_val, restrict_only_sunday):
         if not date_val:
             return False
@@ -258,6 +318,17 @@ class SaleOrder(models.Model):
                 sla_final = next_day + timedelta(hours=11, minutes=59, seconds=59)
             if is_utc:
                 sla_final = sla_final - timedelta(hours=UTC_LOCAL)
+        elif ('mercadolibre' in m_clean or 'mercado' in m_clean) and len(self) == 1 and not getattr(self, 'yuju_due_date', False):
+            # Regla Mercado Libre No-Full sin SLA de Yuju:
+            # 1) Al ingresar la orden (sin guía de envío): 15 días naturales desde el ingreso.
+            # 2) En cuanto se agrega la guía de envío: entrega al día siguiente hábil.
+            if self._has_shipping_guide():
+                guide_dt = self._get_guide_assigned_date() or base_date
+                guide_local = guide_dt + timedelta(hours=UTC_LOCAL)
+                target_local = self._get_next_business_day_end(guide_local)
+            else:
+                target_local = (local_date + timedelta(days=15)).replace(hour=23, minute=59, second=59)
+            sla_final = target_local if not is_utc else (target_local - timedelta(hours=UTC_LOCAL))
         elif schedule.days_after_creation and schedule.days_after_creation > 0:
             if schedule.only_business_days:
                 curr_date = local_date
@@ -657,12 +728,21 @@ class SaleOrder(models.Model):
         if vals.get('channel'):
             vals['channel'] = normalize_channel(vals['channel'])
         res = super(SaleOrder, self).write(vals)
-        trigger_fields = {'channel', 'date_order', 'fulfillment', 'yuju_due_date', 'warehouse_id'}
+        trigger_fields = {
+            'channel', 'date_order', 'fulfillment', 'yuju_due_date', 'warehouse_id',
+            'yuju_carrier_tracking_ref', 'data_tracking_readwrite',
+            'data_attachment_ids', 'attachments', 'data_ready_to_pick',
+        }
         if trigger_fields.intersection(vals.keys()):
+            guide_fields = {
+                'yuju_carrier_tracking_ref', 'data_tracking_readwrite',
+                'data_attachment_ids', 'attachments', 'data_ready_to_pick',
+            }
+            is_guide_update = bool(guide_fields.intersection(vals.keys()))
             for order in self:
-                if not order.sla_manual_override:
+                if not order.sla_manual_override or (is_guide_update and order.sla_override_reason == 'prior_to_entry'):
                     try:
-                        order.calculate_and_assign_sla()
+                        order.calculate_and_assign_sla(force=is_guide_update and order.sla_override_reason == 'prior_to_entry')
                     except Exception as e:
                         _logger.error(f"Error recalculando SLA en write de orden {order.name}: {e}")
         return res
@@ -682,3 +762,19 @@ class SaleOrder(models.Model):
                 'active_id': self.id,
             }
         }
+
+
+class StockPickingSLA(models.Model):
+    _inherit = 'stock.picking'
+
+    def write(self, vals):
+        res = super(StockPickingSLA, self).write(vals)
+        if 'carrier_tracking_ref' in vals and vals.get('carrier_tracking_ref'):
+            for picking in self:
+                order = picking.sale_id
+                if order and (not order.sla_manual_override or order.sla_override_reason == 'prior_to_entry'):
+                    try:
+                        order.calculate_and_assign_sla(force=(order.sla_override_reason == 'prior_to_entry'))
+                    except Exception as e:
+                        _logger.error(f"Error recalculando SLA al asignar guía en picking {picking.name}: {e}")
+        return res
