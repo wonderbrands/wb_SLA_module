@@ -10,6 +10,7 @@
                         <group>
                             <field name="marketplace"/>
                             <field name="sla_source"/>
+                            <field name="exclude_full"/>
                             <field name="days_after_creation"/>
                             <field name="only_business_days"/>
                             <field name="monday_to_friday_" widget="float_time"/>
@@ -39,6 +40,7 @@
                 <list string="Horarios SLA date">
                     <field name="marketplace"/>
                     <field name="sla_source"/>
+                    <field name="exclude_full" optional="show"/>
                     <field name="days_after_creation" optional="show"/>
                     <field name="only_business_days" optional="show"/>
                     <field name="monday_to_friday_" widget="float_time"/>

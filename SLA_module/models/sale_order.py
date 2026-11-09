@@ -7,6 +7,8 @@ _logger = logging.getLogger(__name__)
 
 UTC_LOCAL = -6
 
+FULL_WAREHOUSE_CODES = ('MLSR', 'MLTO', 'FBA', 'WLFL', 'CPFL', 'ELFL')
+
 CHANNEL_NORMALIZATION_MAP = {
     'mercado libre méxico': 'Mercado Libre Mexico',
     'mercado libre mexico': 'Mercado Libre Mexico',
@@ -149,6 +151,50 @@ class SaleOrder(models.Model):
                     order.sla_priority_level = 'normal'
                     order.sla_priority_label = 'En tiempo'
 
+    def _is_full_order(self):
+        """
+        Determina si una orden de venta es Full (Fulfillment by Marketplace: ML Full, Amazon FBA, Walmart WFS, etc.).
+        - fulfillment == 'fbc' (o 'full')
+        - warehouse_id con código en FULL_WAREHOUSE_CODES o nombre que contenga 'fulfillment'
+        Nota: 'fbm' (Drop/Seller) y 'fbf' (Flex) NO son Full y operan desde el almacén propio (WH).
+        """
+        self.ensure_one()
+        ff = (getattr(self, 'fulfillment', '') or '').strip().lower()
+        if ff in ('fbc', 'full'):
+            return True
+        wh = self.warehouse_id
+        if wh:
+            wh_code = (wh.code or '').strip().upper()
+            wh_name = (wh.name or '').strip().lower()
+            if wh_code in FULL_WAREHOUSE_CODES or 'fulfillment' in wh_name:
+                return True
+        return False
+
+    @api.model
+    def _get_non_full_domain(self):
+        """ Dominio ORM para excluir órdenes Full (fbc o almacenes de Fulfillment) """
+        return [
+            '|', ('fulfillment', '=', False), ('fulfillment', 'not in', ['fbc', 'full']),
+            '|', ('warehouse_id', '=', False),
+            '&', ('warehouse_id.code', 'not in', list(FULL_WAREHOUSE_CODES)),
+                 ('warehouse_id.name', 'not ilike', 'fulfillment'),
+        ]
+
+    @api.model
+    def _should_exclude_full_for_channel(self, channel_name, schedule=None):
+        """
+        Evalúa si para el marketplace dado deben excluirse las órdenes Full según marketplace.schedule.
+        Por defecto es True salvo que exista una regla específica con exclude_full = False.
+        """
+        if schedule is None and channel_name:
+            clean_ch = normalize_channel(channel_name)
+            schedule = self.env['marketplace.schedule'].sudo().search([
+                ('marketplace', '=ilike', clean_ch.strip())
+            ], limit=1)
+        if schedule and 'exclude_full' in schedule._fields:
+            return bool(schedule.exclude_full)
+        return True
+
     def _get_business_day(self, date_val, restrict_only_sunday):
         if not date_val:
             return False
@@ -178,9 +224,13 @@ class SaleOrder(models.Model):
         if not schedule or schedule.sla_source == 'yuju':
             return False, None, False
 
+        fulfillment_clean = str(fulfillment).lower().strip() if fulfillment else ""
+        if getattr(schedule, 'exclude_full', True):
+            if fulfillment_clean in ('fbc', 'full') or (len(self) == 1 and self._is_full_order()):
+                return False, None, False
+
         local_date = base_date + timedelta(hours=UTC_LOCAL)
         m_clean = (clean_channel or "").lower().replace(" ", "")
-        fulfillment_clean = str(fulfillment).lower() if fulfillment else ""
         sla_final = False
 
         # Determinar si el marketplace se almacena en UTC o Local según wmds.mysql.config
@@ -198,17 +248,16 @@ class SaleOrder(models.Model):
             except Exception:
                 pass
 
-        if ('mercadolibre' in m_clean or 'mercado' in m_clean) and (fulfillment_clean == 'fbf'):
-            flex_mins = schedule.flex or 0
+        if ('mercadolibre' in m_clean or 'mercado' in m_clean) and (fulfillment_clean == 'fbf') and (schedule.flex and schedule.flex > 0):
+            flex_mins = schedule.flex
             limit_hour_time = datetime.strptime('12:00:00', '%H:%M:%S').time()
-            if flex_mins > 0:
-                if local_date.time() <= limit_hour_time:
-                    sla_final = local_date + timedelta(minutes=flex_mins)
-                else:
-                    next_day = local_date.replace(hour=0, minute=0, second=0) + timedelta(days=1)
-                    sla_final = next_day + timedelta(hours=11, minutes=59, seconds=59)
-                if is_utc:
-                    sla_final = sla_final - timedelta(hours=UTC_LOCAL)
+            if local_date.time() <= limit_hour_time:
+                sla_final = local_date + timedelta(minutes=flex_mins)
+            else:
+                next_day = local_date.replace(hour=0, minute=0, second=0) + timedelta(days=1)
+                sla_final = next_day + timedelta(hours=11, minutes=59, seconds=59)
+            if is_utc:
+                sla_final = sla_final - timedelta(hours=UTC_LOCAL)
         elif schedule.days_after_creation and schedule.days_after_creation > 0:
             if schedule.only_business_days:
                 curr_date = local_date
@@ -282,6 +331,18 @@ class SaleOrder(models.Model):
             schedule = self.env['marketplace.schedule'].search([
                 ('marketplace', '=ilike', channel.strip())
             ], limit=1)
+
+            # Si la orden es Full y la regla excluye Full (activo por defecto), no calcular ni asignar SLA
+            exclude_full = self._should_exclude_full_for_channel(channel, schedule=schedule)
+            if exclude_full and order._is_full_order():
+                if order.sla_date and (not order.sla_manual_override or order.sla_override_reason == 'prior_to_entry'):
+                    order.write({
+                        'sla_date': False,
+                        'sla_manual_override': False,
+                        'sla_priority_level': 'normal',
+                        'sla_priority_label': '',
+                    })
+                continue
 
             sla = False
 
@@ -428,10 +489,72 @@ class SaleOrder(models.Model):
     @api.model
     def _cron_update_sla_priorities(self):
         """ Cron job ejecutable periódicamente para recalcular y sincronizar SLA en órdenes de venta y albaranes """
-        orders_without_sla = self.search([
+        # 1. Limpiar SLA de órdenes Full (fbc / almacenes Fulfillment) donde exclude_full esté activo
+        allowed_full_channels = [
+            normalize_channel(s.marketplace)
+            for s in self.env['marketplace.schedule'].sudo().search([('exclude_full', '=', False)])
+            if s.marketplace
+        ]
+        if allowed_full_channels:
+            self.env.cr.execute("""
+                UPDATE sale_order s
+                SET sla_date = NULL,
+                    sla_manual_override = false,
+                    sla_priority_level = 'normal',
+                    sla_priority_label = ''
+                FROM stock_warehouse w
+                WHERE w.id = s.warehouse_id
+                  AND s.sla_date IS NOT NULL
+                  AND (COALESCE(s.sla_manual_override, false) = false OR s.sla_override_reason = 'prior_to_entry')
+                  AND (
+                      lower(COALESCE(s.fulfillment, '')) IN ('fbc', 'full')
+                      OR upper(COALESCE(w.code, '')) IN %s
+                      OR lower(COALESCE(w.name, '')) LIKE '%%fulfillment%%'
+                  )
+                  AND COALESCE(s.channel, '') NOT IN %s;
+            """, (FULL_WAREHOUSE_CODES, tuple(allowed_full_channels)))
+        else:
+            self.env.cr.execute("""
+                UPDATE sale_order s
+                SET sla_date = NULL,
+                    sla_manual_override = false,
+                    sla_priority_level = 'normal',
+                    sla_priority_label = ''
+                FROM stock_warehouse w
+                WHERE w.id = s.warehouse_id
+                  AND s.sla_date IS NOT NULL
+                  AND (COALESCE(s.sla_manual_override, false) = false OR s.sla_override_reason = 'prior_to_entry')
+                  AND (
+                      lower(COALESCE(s.fulfillment, '')) IN ('fbc', 'full')
+                      OR upper(COALESCE(w.code, '')) IN %s
+                      OR lower(COALESCE(w.name, '')) LIKE '%%fulfillment%%'
+                  );
+            """, (FULL_WAREHOUSE_CODES,))
+
+        # 2. Buscar órdenes Drop / Flex (no Full) sin SLA para calcularles su SLA
+        active_schedules = self.env['marketplace.schedule'].sudo().search([])
+        calc_channels = list({
+            s.marketplace.strip() for s in active_schedules
+            if s.marketplace and s.sla_source in ('auto', 'calculated')
+        })
+        domain_missing = [
             ('state', '!=', 'cancel'),
             ('sla_date', '=', False),
-        ], limit=200)
+        ] + self._get_non_full_domain()
+
+        if calc_channels:
+            domain_missing += [
+                '|',
+                ('channel', 'in', calc_channels),
+                '&', ('yuju_due_date', '!=', False), ('yuju_due_date', '!=', ''),
+            ]
+        else:
+            domain_missing += [
+                ('yuju_due_date', '!=', False),
+                ('yuju_due_date', '!=', ''),
+            ]
+
+        orders_without_sla = self.search(domain_missing, order='date_order desc, id desc', limit=1000)
         for order in orders_without_sla:
             try:
                 order.calculate_and_assign_sla()
@@ -473,42 +596,49 @@ class SaleOrder(models.Model):
         self.env.cr.execute(sql_so)
         updated_so = self.env.cr.rowcount
 
-        # Actualización masiva por SQL de niveles de prioridad y etiquetas en stock_picking
-        sql_sp = """
-            UPDATE stock_picking
-            SET sla_priority_level = CASE
-                    WHEN sla_date < (NOW() AT TIME ZONE 'UTC') THEN 'overdue'
-                    WHEN sla_date <= (NOW() AT TIME ZONE 'UTC') + interval '1 hour' THEN 'critical_1h'
-                    WHEN sla_date <= (NOW() AT TIME ZONE 'UTC') + interval '2 hours' THEN 'urgent_2h'
-                    WHEN sla_date <= (NOW() AT TIME ZONE 'UTC') + interval '6 hours' THEN 'warning_6h'
-                    WHEN sla_date <= (NOW() AT TIME ZONE 'UTC') + interval '24 hours' THEN 'notice_24h'
-                    ELSE 'normal'
-                END,
-                sla_priority_label = CASE
-                    WHEN sla_date < (NOW() AT TIME ZONE 'UTC') THEN 'SLA Vencido'
-                    WHEN sla_date <= (NOW() AT TIME ZONE 'UTC') + interval '1 hour' THEN 'Está a punto de llegar la recolecta (< 1h)'
-                    WHEN sla_date <= (NOW() AT TIME ZONE 'UTC') + interval '2 hours' THEN 'Quedan 2 horas para la recolecta'
-                    WHEN sla_date <= (NOW() AT TIME ZONE 'UTC') + interval '6 hours' THEN 'Quedan 6 horas para la recolecta'
-                    WHEN sla_date <= (NOW() AT TIME ZONE 'UTC') + interval '24 hours' THEN 'Quedan unas horas para la recolecta'
-                    ELSE 'En tiempo'
-                END
-            WHERE state NOT IN ('done', 'cancel')
-              AND sla_date IS NOT NULL
-              AND (
-                  sla_priority_level IS DISTINCT FROM CASE
-                      WHEN sla_date < (NOW() AT TIME ZONE 'UTC') THEN 'overdue'
-                      WHEN sla_date <= (NOW() AT TIME ZONE 'UTC') + interval '1 hour' THEN 'critical_1h'
-                      WHEN sla_date <= (NOW() AT TIME ZONE 'UTC') + interval '2 hours' THEN 'urgent_2h'
-                      WHEN sla_date <= (NOW() AT TIME ZONE 'UTC') + interval '6 hours' THEN 'warning_6h'
-                      WHEN sla_date <= (NOW() AT TIME ZONE 'UTC') + interval '24 hours' THEN 'notice_24h'
-                      ELSE 'normal'
-                  END
-              );
-        """
-        self.env.cr.execute(sql_sp)
-        updated_sp = self.env.cr.rowcount
+        # Actualización masiva por SQL de niveles de prioridad y etiquetas en stock_picking (solo si existen columnas almacenadas)
+        updated_sp = 0
+        self.env.cr.execute("""
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name = 'stock_picking' AND column_name = 'sla_date'
+        """)
+        if self.env.cr.fetchone():
+            sql_sp = """
+                UPDATE stock_picking
+                SET sla_priority_level = CASE
+                        WHEN sla_date < (NOW() AT TIME ZONE 'UTC') THEN 'overdue'
+                        WHEN sla_date <= (NOW() AT TIME ZONE 'UTC') + interval '1 hour' THEN 'critical_1h'
+                        WHEN sla_date <= (NOW() AT TIME ZONE 'UTC') + interval '2 hours' THEN 'urgent_2h'
+                        WHEN sla_date <= (NOW() AT TIME ZONE 'UTC') + interval '6 hours' THEN 'warning_6h'
+                        WHEN sla_date <= (NOW() AT TIME ZONE 'UTC') + interval '24 hours' THEN 'notice_24h'
+                        ELSE 'normal'
+                    END,
+                    sla_priority_label = CASE
+                        WHEN sla_date < (NOW() AT TIME ZONE 'UTC') THEN 'SLA Vencido'
+                        WHEN sla_date <= (NOW() AT TIME ZONE 'UTC') + interval '1 hour' THEN 'Está a punto de llegar la recolecta (< 1h)'
+                        WHEN sla_date <= (NOW() AT TIME ZONE 'UTC') + interval '2 hours' THEN 'Quedan 2 horas para la recolecta'
+                        WHEN sla_date <= (NOW() AT TIME ZONE 'UTC') + interval '6 hours' THEN 'Quedan 6 horas para la recolecta'
+                        WHEN sla_date <= (NOW() AT TIME ZONE 'UTC') + interval '24 hours' THEN 'Quedan unas horas para la recolecta'
+                        ELSE 'En tiempo'
+                    END
+                WHERE state NOT IN ('done', 'cancel')
+                  AND sla_date IS NOT NULL
+                  AND (
+                      sla_priority_level IS DISTINCT FROM CASE
+                          WHEN sla_date < (NOW() AT TIME ZONE 'UTC') THEN 'overdue'
+                          WHEN sla_date <= (NOW() AT TIME ZONE 'UTC') + interval '1 hour' THEN 'critical_1h'
+                          WHEN sla_date <= (NOW() AT TIME ZONE 'UTC') + interval '2 hours' THEN 'urgent_2h'
+                          WHEN sla_date <= (NOW() AT TIME ZONE 'UTC') + interval '6 hours' THEN 'warning_6h'
+                          WHEN sla_date <= (NOW() AT TIME ZONE 'UTC') + interval '24 hours' THEN 'notice_24h'
+                          ELSE 'normal'
+                      END
+                  );
+            """
+            self.env.cr.execute(sql_sp)
+            updated_sp = self.env.cr.rowcount
 
         _logger.info(f"Cron SLA Priorities: Actualizadas {updated_so} órdenes de venta y {updated_sp} albaranes.")
+        return {'updated_so': updated_so, 'updated_sp': updated_sp}
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -527,7 +657,7 @@ class SaleOrder(models.Model):
         if vals.get('channel'):
             vals['channel'] = normalize_channel(vals['channel'])
         res = super(SaleOrder, self).write(vals)
-        trigger_fields = {'channel', 'date_order', 'fulfillment', 'yuju_due_date'}
+        trigger_fields = {'channel', 'date_order', 'fulfillment', 'yuju_due_date', 'warehouse_id'}
         if trigger_fields.intersection(vals.keys()):
             for order in self:
                 if not order.sla_manual_override:

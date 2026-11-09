@@ -25,6 +25,12 @@ class MarketplaceSchedule(models.Model):
 
     days_after_creation = fields.Integer(string='Días a partir de la creación de la venta', help='Número de días naturales a sumar desde la fecha de creación de la venta para calcular el SLA.', default=0)
     only_business_days = fields.Boolean(string='Solo contar días hábiles', help='Si está activo, los sábados y domingos no cuentan para el cálculo de días del SLA.', default=False)
+    exclude_full = fields.Boolean(
+        string='Excluir órdenes Full (FBC)',
+        default=True,
+        help='Si está activo, las órdenes Full (fulfillment=fbc o almacén de Fulfillment como MLSR, FBA, WLFL) '
+             'se excluyen de la sincronización y del cálculo de SLA; solo se procesan órdenes Drop (fbm) y Flex (fbf).'
+    )
 
     monday_to_friday_ = fields.Float(string='Lunes a Viernes (horas)', default=24.0)
     saturday = fields.Float(string='Sábado (horas)', default=0.0)
@@ -39,6 +45,18 @@ class MarketplaceSchedule(models.Model):
     # Auxiliares para control de vista (Invisible logic)
     auxiliar_1 = fields.Char(string='Es MercadoLibre', store=True)
     auxiliar_2 = fields.Char(string='Es Sitio Web', store=True)
+
+    def init(self):
+        # Asegurar que la columna exista y que las reglas actuales tengan exclude_full = True por defecto
+        self.env.cr.execute("""
+            ALTER TABLE marketplace_schedule
+            ADD COLUMN IF NOT EXISTS exclude_full boolean DEFAULT true;
+        """)
+        self.env.cr.execute("""
+            UPDATE marketplace_schedule
+            SET exclude_full = true
+            WHERE exclude_full IS NULL;
+        """)
 
     @api.onchange('marketplace')
     def _onchange_marketplace(self):
@@ -56,3 +74,7 @@ class MarketplaceSchedule(models.Model):
                 self.auxiliar_2 = 'True'
             else:
                 self.auxiliar_2 = 'False'
+
+            # Enforzar exclude_full por defecto en marketplaces con operación Full
+            if any(k in m_clean for k in ('mercado', 'walmart', 'amazon', 'coppel', 'elektra')):
+                self.exclude_full = True
